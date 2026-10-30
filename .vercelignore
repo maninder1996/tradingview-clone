@@ -1,0 +1,8 @@
+legacy-mytv/
+*.bat
+*.vbs
+*.ps1
+*.db
+*.db-shm
+*.db-wal
+__pycache__/
