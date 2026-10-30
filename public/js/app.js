@@ -322,6 +322,9 @@ export class App {
     );
     const compareBtn = h('button', { class: 'tb-btn icon-only', title: 'Compare or Add Symbol', html: ICON.plus, onclick: () => this.openCompareModal() });
 
+    const marketsBtn = h('button', { class: 'tb-btn', title: 'Markets — quick symbols', onclick: (e) => this.openMarketsDropdown(e.currentTarget) },
+      h('span', {}, 'Markets'), h('span', { class: 'chev', html: ICON.chevDown }));
+
     // Intervals
     const ivBtns = INTERVALS.filter((x) => this.state.favIntervals.includes(x.id)).map((x) =>
       h('button', {
@@ -411,7 +414,7 @@ export class App {
 
     const sep = () => h('div', { class: 'tb-sep' });
     this.topbar.append(
-      symBtn, compareBtn, sep(),
+      symBtn, compareBtn, marketsBtn, sep(),
       h('div', { class: 'tb-group tb-ws' },
         h('span', { class: 'tb-ws-lbl', title: `Active: ${ws.name}` }, 'Layout'),
         wsPick, wsNew, wsRen, wsDel,
@@ -1568,6 +1571,32 @@ export class App {
       h('span', {}, t.label)))
     );
     this.showPop(menu);
+  }
+
+  openMarketsDropdown(btn) {
+    const r = btn.getBoundingClientRect();
+    const cur = this.active?.state.symbol;
+    const groups = [
+      ['Indian Indices', ['NSE:NIFTY', 'NSE:BANKNIFTY', 'BSE:SENSEX', 'NSE:FINNIFTY', 'NSE:INDIAVIX']],
+      ['Crypto', ['BINANCE:BTCUSDT']],
+      ['Gold & Commodities', ['BINANCE:XAUUSDT', 'INR:GOLD10G', 'COMEX:GC1!']],
+      ['Stocks', ['NSE:RELIANCE']],
+      ['Forex & Global', ['FX:USDINR', 'SP:SPX']],
+    ];
+    const items = [];
+    for (const [title, ids] of groups) {
+      const rows = ids.filter((id) => getSymbol(id));
+      if (!rows.length) continue;
+      items.push(h('div', { class: 'pop-sec' }, title));
+      for (const id of rows) {
+        const s = getSymbol(id);
+        items.push(h('div', {
+          class: 'pop-item' + (cur === id ? ' active' : ''),
+          onclick: () => { this.setSymbolOnActive(id); this.closePop(); },
+        }, h('span', { style: { flex: 1 } }, shortName(id)), h('span', { class: 'muted' }, s.name || s.ex)));
+      }
+    }
+    this.showPop(h('div', { class: 'pop-menu', style: { left: r.left + 'px', top: r.bottom + 4 + 'px', minWidth: '280px', maxHeight: '70vh', overflowY: 'auto' } }, ...items));
   }
 
   openTemplatesDropdown(btn) {
