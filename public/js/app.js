@@ -322,22 +322,6 @@ export class App {
     );
     const compareBtn = h('button', { class: 'tb-btn icon-only', title: 'Compare or Add Symbol', html: ICON.plus, onclick: () => this.openCompareModal() });
 
-    // Quick asset pills (NIFTY, BTC, GOLD≈Capital.com, BANKNIFTY, RELIANCE)
-    const quickSyms = [
-      { id: 'NSE:NIFTY', label: 'NIFTY 50' },
-      { id: 'NSE:BANKNIFTY', label: 'BANKNIFTY' },
-      { id: 'BINANCE:BTCUSDT', label: 'BTC/USDT' },
-      { id: 'BINANCE:XAUUSDT', label: 'GOLD ≈ Capital' },
-      { id: 'INR:GOLD10G', label: 'GOLD ₹/10g' },
-      { id: 'NSE:RELIANCE', label: 'RELIANCE' },
-    ];
-    const quickGroup = h('div', { class: 'tb-group tb-quick' },
-      ...quickSyms.map((q) => h('button', {
-        class: 'tb-pill' + (sym.id === q.id ? ' active' : ''),
-        onclick: () => this.setSymbolOnActive(q.id),
-      }, q.label))
-    );
-
     // Intervals
     const ivBtns = INTERVALS.filter((x) => this.state.favIntervals.includes(x.id)).map((x) =>
       h('button', {
@@ -432,7 +416,6 @@ export class App {
         h('span', { class: 'tb-ws-lbl', title: `Active: ${ws.name}` }, 'Layout'),
         wsPick, wsNew, wsRen, wsDel,
       ), sep(),
-      quickGroup, sep(),
       h('div', { class: 'tb-group' }, ...ivBtns, ivMore), sep(),
       ctBtn, nogapBtn, sep(),
       indBtn, tplBtn, sep(),
