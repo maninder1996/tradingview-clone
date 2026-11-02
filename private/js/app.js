@@ -402,6 +402,7 @@ export class App {
     const setBtn = h('button', { class: 'tb-btn icon-only', title: 'Chart Settings', html: ICON.gear, onclick: () => this.openSettingsModal() });
     const snapBtn = h('button', { class: 'tb-btn icon-only', title: 'Download Chart Snapshot (PNG)', html: ICON.camera, onclick: () => this.takeScreenshot() });
     const fsBtn = h('button', { class: 'tb-btn icon-only', title: 'Fullscreen (F11)', html: ICON.fullscreen, onclick: () => this.toggleFullscreen() });
+    const logoutBtn = h('button', { class: 'tb-btn icon-only', title: 'Log out', html: ICON.logout, onclick: async () => { try { await fetch('/api/logout'); } catch (e) { /* */ } location.href = '/login.html'; } });
     const savedBadge = h('span', { class: 'tb-saved', title: 'Drawings & layouts auto-save to this browser' }, '●');
 
     const tradeQuick = h('div', { class: 'tb-trade' },
@@ -424,7 +425,7 @@ export class App {
       h('div', { class: 'tb-spacer' }),
       savedBadge, sep(),
       tradeQuick, sep(),
-      layBtn, setBtn, themeBtn, snapBtn, fsBtn
+      layBtn, setBtn, themeBtn, snapBtn, fsBtn, logoutBtn
     );
   }
 
@@ -1546,6 +1547,8 @@ export class App {
   closePop() { this.popRoot.innerHTML = ''; }
 
   openIntervalDropdown(btn) {
+    // the top bar may have been re-rendered (e.g. after pinning a star) — re-anchor to the live chevron
+    if (!btn.isConnected) btn = this.topbar.querySelector('[title="All Timeframes"]') || this.topbar;
     const r = btn.getBoundingClientRect();
     const cur = this.active?.state.interval;
     const menu = h('div', { class: 'pop-menu', style: { left: r.left + 'px', top: r.bottom + 4 + 'px' } },

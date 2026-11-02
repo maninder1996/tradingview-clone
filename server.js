@@ -8,9 +8,19 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
+
+// tiny .env loader for local runs (on Vercel use Project Settings -> Environment Variables)
+try {
+  for (const line of fs.readFileSync(path.join(__dirname, '.env'), 'utf8').split(/\r?\n/)) {
+    const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/);
+    if (m && !(m[1] in process.env)) process.env[m[1]] = m[2].replace(/^["']|["']$/g, '');
+  }
+} catch (e) { /* no .env */ }
 
 const PORT = process.env.PORT || 8787;
-const PUB = path.join(__dirname, 'public');
+const PUB = path.join(__dirname, 'public');    // public: login page only
+const PRIV = path.join(__dirname, 'private');  // the app, served only after login
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36';
 
 const MIME = {
@@ -248,8 +258,8 @@ async function mapLimit(arr, n, fn) {
 }
 
 // ---------------------------------------------------------------- http
-function send(res, code, body, type = 'application/json') {
-  res.writeHead(code, { 'Content-Type': type, 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' });
+function send(res, code, body, type = 'application/json', extra = {}) {
+  res.writeHead(code, { 'Content-Type': type, 'Cache-Control': 'no-store', ...extra });
   res.end(typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body));
 }
 
@@ -279,21 +289,102 @@ async function api(url, res) {
   }
 }
 
-const server = http.createServer((req, res) => {
-  const url = new URL(req.url, 'http://localhost');
-  if (url.pathname.startsWith('/api/')) return api(url, res);
-  let file = decodeURIComponent(url.pathname);
-  if (file === '/') file = '/index.html';
-  const fp = path.normalize(path.join(PUB, file));
-  if (!fp.startsWith(PUB)) return send(res, 403, 'Forbidden', 'text/plain');
+// ---------------------------------------------------------------- auth (personal logins, no database)
+// AUTH_USERS="alice:password1,bob:password2"   (set in .env locally, or Vercel Environment Variables)
+const USERS = new Map();
+for (const pair of (process.env.AUTH_USERS || '').split(',')) {
+  const i = pair.indexOf(':');
+  if (i > 0 && i < pair.length - 1) USERS.set(pair.slice(0, i).trim(), pair.slice(i + 1));
+}
+const SECRET = process.env.AUTH_SECRET || crypto.createHash('sha256').update('cv|' + (process.env.AUTH_USERS || '')).digest('hex');
+const SESSION_MS = 30 * 24 * 3600e3;
+const sha = (v) => crypto.createHash('sha256').update(String(v)).digest();
+const sign = (v) => crypto.createHmac('sha256', SECRET).update(v).digest('base64url');
+const safeEq = (a, b) => crypto.timingSafeEqual(sha(a), sha(b));
+
+function makeToken(user) {
+  const body = Buffer.from(JSON.stringify({ u: user, e: Date.now() + SESSION_MS })).toString('base64url');
+  return `${body}.${sign(body)}`;
+}
+function sessionUser(req) {
+  const m = /(?:^|;\s*)cv_session=([^;]+)/.exec(req.headers.cookie || '');
+  if (!m) return null;
+  const [body, sig] = m[1].split('.');
+  if (!body || !sig || !safeEq(sig, sign(body))) return null;
+  try {
+    const { u, e } = JSON.parse(Buffer.from(body, 'base64url').toString());
+    return e > Date.now() && USERS.has(u) ? u : null;
+  } catch (e) { return null; }
+}
+const cookie = (req, val, maxAge) =>
+  `cv_session=${val}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${req.headers['x-forwarded-proto'] === 'https' ? '; Secure' : ''}`;
+
+async function readBody(req) {
+  const j = (t) => { try { return JSON.parse(t || '{}'); } catch (e) { return {}; } };
+  if (req.body !== undefined) return typeof req.body === 'string' ? j(req.body) : Buffer.isBuffer(req.body) ? j(req.body.toString()) : (req.body || {});
+  return new Promise((resolve) => {
+    let t = '';
+    req.on('data', (c) => { t += c; if (t.length > 1e4) req.destroy(); });
+    req.on('end', () => resolve(j(t)));
+    req.on('error', () => resolve({}));
+  });
+}
+
+// best-effort brute-force throttle (per instance memory)
+const fails = new Map();
+async function login(req, res) {
+  const ip = String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '').split(',')[0].trim();
+  const f = fails.get(ip);
+  const recent = f && Date.now() - f.t < 10 * 60e3;
+  if (recent && f.n >= 8) return send(res, 429, { error: 'Too many attempts. Try again in a few minutes.' });
+  const { username = '', password = '' } = await readBody(req);
+  const name = String(username).trim();
+  const stored = USERS.get(name);
+  if (stored !== undefined && safeEq(password, stored)) {
+    fails.delete(ip);
+    return send(res, 200, { ok: true }, 'application/json', { 'Set-Cookie': cookie(req, makeToken(name), SESSION_MS / 1000) });
+  }
+  fails.set(ip, { n: (recent ? f.n : 0) + 1, t: Date.now() });
+  await new Promise((r) => setTimeout(r, 600));
+  send(res, 401, { error: USERS.size ? 'Wrong username or password' : 'No users configured on the server (set AUTH_USERS)' });
+}
+
+function serveFile(res, dir, file) {
+  const fp = path.normalize(path.join(dir, file));
+  if (!fp.startsWith(dir)) return send(res, 403, 'Forbidden', 'text/plain');
   fs.readFile(fp, (err, buf) => {
     if (err) return send(res, 404, 'Not found', 'text/plain');
     res.writeHead(200, { 'Content-Type': MIME[path.extname(fp)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
     res.end(buf);
   });
-});
+}
 
-if (require.main === module) server.listen(PORT, () => console.log(`ChartVista running at http://localhost:${PORT}`));
+async function handle(req, res) {
+  const url = new URL(req.url, 'http://localhost');
+  const p = url.pathname;
+  if (p === '/api/health') return send(res, 200, { ok: true, time: Date.now() });
+  if (p === '/api/login' && req.method === 'POST') return login(req, res);
+  if (p === '/api/logout') return send(res, 200, { ok: true }, 'application/json', { 'Set-Cookie': cookie(req, '', 0) });
+  const user = sessionUser(req);
+  if (p === '/api/me') return user ? send(res, 200, { user }) : send(res, 401, { error: 'login required' });
+  if (p.startsWith('/api/')) return user ? api(url, res) : send(res, 401, { error: 'login required' });
+  if (p === '/login' || p === '/login.html') {
+    if (user) return send(res, 302, '', 'text/plain', { Location: '/' });
+    return serveFile(res, PUB, '/login.html');
+  }
+  if (!user) return send(res, 302, '', 'text/plain', { Location: '/login.html' });
+  let file = decodeURIComponent(p);
+  if (file === '/') file = '/index.html';
+  return serveFile(res, PRIV, file);
+}
+
+const server = http.createServer(handle);
+
+if (require.main === module) {
+  if (!USERS.size) console.warn('WARNING: AUTH_USERS is not set - nobody can log in. Create .env with AUTH_USERS=name:password');
+  server.listen(PORT, () => console.log(`ChartVista running at http://localhost:${PORT}`));
+}
 
 module.exports = server; // Vercel needs the default export to be a server/function
 module.exports.api = api;
+module.exports.handle = handle;

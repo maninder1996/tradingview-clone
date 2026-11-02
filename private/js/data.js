@@ -17,6 +17,7 @@ async function getJSON(url, timeout = 12000) {
   const t = setTimeout(() => ctrl.abort(), timeout);
   try {
     const r = await fetch(url, { signal: ctrl.signal });
+    if (r.status === 401 && url.startsWith('/api/')) { location.href = '/login.html'; throw new Error('Session expired — please log in'); }
     if (!r.ok) { let m = 'HTTP ' + r.status; try { m = (await r.json()).error || m; } catch (e) { /* */ } throw new Error(m); }
     return await r.json();
   } finally { clearTimeout(t); }

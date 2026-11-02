@@ -3,6 +3,7 @@ const s = (d, v = '0 0 24 24') => `<svg viewBox="${v}" width="18" height="18" fi
 
 export const ICON = {
   logo: `<svg viewBox="0 0 28 28" width="22" height="22" fill="none"><path d="M3 8h9v13H7V12H3V8Z" fill="currentColor"/><circle cx="15.5" cy="10.5" r="2.5" fill="#2962ff"/><path d="M18.5 21 25 8h-4.3l-6.5 13h4.3Z" fill="currentColor"/></svg>`,
+  logout: s('<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>'),
   search: s('<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>'),
   plus: s('<circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/>'),
   plusSm: s('<path d="M12 5v14M5 12h14"/>'),
