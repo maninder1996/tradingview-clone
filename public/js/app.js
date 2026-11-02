@@ -659,6 +659,28 @@ export class App {
     arr.push(d);
     this.commitDrawings(sym, beforeSnap);
   }
+  cloneDrawing(chart, d) {
+    if (!d) return;
+    const sym = chart.state.symbol;
+    const before = this.snapshot(sym);
+    const copy = JSON.parse(JSON.stringify(d));
+    copy.id = uid();
+    copy.locked = false;
+    // offset the clone slightly so it is visible next to the original
+    const bars = chart.bars || [];
+    const dt = bars.length > 1 ? (bars[bars.length - 1].t - bars[bars.length - 2].t) : 60000;
+    const ref = (copy.pts || []).find((p) => p.p != null)?.p || 0;
+    (copy.pts || []).forEach((p) => {
+      if (p.t != null) p.t += dt * 5;
+      if (p.p != null) p.p -= Math.abs(ref) * 0.002;
+    });
+    this.drawingsFor(sym).push(copy);
+    this.commitDrawings(sym, before);
+    chart.selected = copy;
+    this.onSelectDrawing(chart, copy);
+    chart.requestRender();
+    this.toast(`${toolName(copy.type)} cloned`);
+  }
   removeDrawing(sym, d) {
     const before = this.snapshot(sym);
     this.drawingsMap[sym] = this.drawingsFor(sym).filter((x) => x !== d && x.id !== d.id);
@@ -739,6 +761,7 @@ export class App {
         html: d.locked ? ICON.lock : ICON.unlock,
         onclick: () => { d.locked = !d.locked; chart.updateSelToolbar(); this.saveSoon(); },
       }),
+      h('button', { title: 'Clone (Ctrl+D)', html: ICON.copy, onclick: () => this.cloneDrawing(chart, d) }),
       h('button', { title: 'Delete (Del)', class: 'danger', html: ICON.trash, onclick: () => this.removeDrawing(chart.state.symbol, d) }),
     );
   }
@@ -1665,6 +1688,7 @@ export class App {
     if (drawing) {
       items.push(
         h('div', { class: 'pop-item', onclick: () => { this.closePop(); this.openDrawingProps(chart, drawing); } }, `Edit ${toolName(drawing.type)} Settings…`),
+        h('div', { class: 'pop-item', onclick: () => { this.closePop(); this.cloneDrawing(chart, drawing); } }, `Clone ${toolName(drawing.type)} (Ctrl+D)`),
         h('div', { class: 'pop-item danger', onclick: () => { this.closePop(); this.removeDrawing(sym, drawing); } }, `Remove ${toolName(drawing.type)}`),
         h('div', { class: 'pop-sep' })
       );
@@ -2049,6 +2073,7 @@ export class App {
         return;
       }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); this.openSymbolSearch(); return; }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd' && this.active?.selected) { e.preventDefault(); this.cloneDrawing(this.active, this.active.selected); return; }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); this.undoDrawing(); return; }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); this.redoDrawing(); return; }
       if (e.altKey && e.key.toLowerCase() === 'a') { e.preventDefault(); this.openAlertModal(); return; }
