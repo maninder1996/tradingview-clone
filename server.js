@@ -361,6 +361,11 @@ function serveFile(res, dir, file) {
 
 async function handle(req, res) {
   const url = new URL(req.url, 'http://localhost');
+  // Vercel rewrites every request to /api and passes the real path in ?__path=
+  if (url.pathname === '/api' && url.searchParams.has('__path')) {
+    url.pathname = '/' + url.searchParams.get('__path').replace(/^\/+/, '');
+    url.searchParams.delete('__path');
+  }
   const p = url.pathname;
   if (p === '/api/health') return send(res, 200, { ok: true, time: Date.now() });
   if (p === '/api/login' && req.method === 'POST') return login(req, res);
