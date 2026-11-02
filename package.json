@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "MyTV ChartVista — TradingView clone (Gemini design) with India NSE/BSE, Bitcoin, Gold ≈ Capital.com (XAUUSDT), drawings, alerts, screener, NoGap",
   "scripts": {
-    "start": "node chartvista.js"
+    "start": "node server.js"
   },
   "engines": {
     "node": "22.x"

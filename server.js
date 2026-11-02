@@ -295,4 +295,5 @@ const server = http.createServer((req, res) => {
 
 if (require.main === module) server.listen(PORT, () => console.log(`ChartVista running at http://localhost:${PORT}`));
 
-module.exports = { api };
+module.exports = server; // Vercel needs the default export to be a server/function
+module.exports.api = api;

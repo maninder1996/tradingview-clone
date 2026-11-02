@@ -20,4 +20,4 @@ If already = 1 Then
 End If
 
 ' Window style 0 = hidden (no terminal)
-sh.Run """" & nodeExe & """ """ & dir & "\chartvista.js""", 0, False
+sh.Run """" & nodeExe & """ """ & dir & "\server.js""", 0, False
