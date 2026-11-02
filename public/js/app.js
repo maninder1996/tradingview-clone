@@ -381,14 +381,11 @@ export class App {
 
     // Named workspaces (create / rename / delete) + grid panel count
     const ws = this.activeWorkspace();
-    const wsPick = h('select', {
-      class: 'tb-ws-pick',
+    const wsPick = h('button', {
+      class: 'tb-btn tb-ws-pick',
       title: 'Named layouts — each keeps its own drawings',
-      onchange: (e) => this.switchWorkspace(e.target.value),
-    }, ...this.workspaces.map((w) => h('option', { value: w.id, selected: w.id === this.activeWorkspaceId }, w.name)));
-    const wsNew = h('button', { class: 'tb-btn icon-only', title: 'Create new named layout (empty drawings)', html: ICON.plus, onclick: () => this.createWorkspace() });
-    const wsRen = h('button', { class: 'tb-btn icon-only', title: 'Rename this layout', html: ICON.pencil, onclick: () => this.renameWorkspace() });
-    const wsDel = h('button', { class: 'tb-btn icon-only danger', title: 'Delete this layout', html: ICON.trash, onclick: () => this.deleteWorkspace() });
+      onclick: (e) => this.openWorkspaceDropdown(e.currentTarget),
+    }, h('span', {}, ws.name), h('span', { class: 'chev', html: ICON.chevDown }));
 
     // Right side: Layout grid, Settings, Theme, Screenshot, Fullscreen, Trade button
     const layBtn = h('button', { class: 'tb-btn', title: `Panel grid (${lay.label})`, onclick: (e) => this.openLayoutDropdown(e.currentTarget) },
@@ -417,7 +414,7 @@ export class App {
       symBtn, compareBtn, marketsBtn, sep(),
       h('div', { class: 'tb-group tb-ws' },
         h('span', { class: 'tb-ws-lbl', title: `Active: ${ws.name}` }, 'Layout'),
-        wsPick, wsNew, wsRen, wsDel,
+        wsPick,
       ), sep(),
       h('div', { class: 'tb-group' }, ...ivBtns, ivMore), sep(),
       ctBtn, nogapBtn, sep(),
@@ -1639,6 +1636,24 @@ export class App {
           this.toast(`Applied "${tpl.name}"`);
         },
       }, tpl.name))
+    );
+    this.showPop(menu);
+  }
+
+  openWorkspaceDropdown(btn) {
+    const r = btn.getBoundingClientRect();
+    const item = (icon, text, fn, cls = '') => h('div', { class: 'pop-item ' + cls, style: { display: 'flex', alignItems: 'center', gap: '8px' }, onclick: () => { this.closePop(); fn(); } },
+      h('span', { html: icon, style: { display: 'inline-flex', width: '16px', height: '16px' } }), h('span', {}, text));
+    const menu = h('div', { class: 'pop-menu', style: { left: r.left + 'px', top: r.bottom + 4 + 'px', minWidth: '220px' } },
+      h('div', { class: 'pop-sec' }, 'Layouts'),
+      ...this.workspaces.map((w) => h('div', {
+        class: 'pop-item' + (w.id === this.activeWorkspaceId ? ' active' : ''),
+        onclick: () => { this.closePop(); this.switchWorkspace(w.id); },
+      }, `${w.id === this.activeWorkspaceId ? '✓ ' : ''}${w.name}`)),
+      h('div', { class: 'pop-sep' }),
+      item(ICON.plus, 'New layout…', () => this.createWorkspace()),
+      item(ICON.pencil, 'Rename layout…', () => this.renameWorkspace()),
+      item(ICON.trash, 'Delete layout', () => this.deleteWorkspace(), 'danger'),
     );
     this.showPop(menu);
   }
