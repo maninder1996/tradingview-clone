@@ -5,7 +5,7 @@ import { Emitter, ivInfo, isIntraday, seeded } from './utils.js';
 const BINANCE = 'https://api.binance.com/api/v3';
 const BINANCE_F = 'https://fapi.binance.com/fapi/v1';
 const BWS = 'wss://stream.binance.com:9443';
-const BWS_F = 'wss://fstream.binance.com';
+const BWS_F = 'wss://fstream.binance.com/market'; // futures streams moved to /market (the old /ws path connects but sends nothing)
 const BIV = { '1m': '1m', '3m': '3m', '5m': '5m', '15m': '15m', '30m': '30m', '1h': '1h', '2h': '2h', '4h': '4h', '1D': '1d', '1W': '1w', '1M': '1M' };
 let binanceDown = false;
 
@@ -109,10 +109,12 @@ export function subscribe(symId, iv, onBar, demo = false) {
   }
 
   if (sym.src === 'binance' && !binanceDown) {
+    let lastMsg = Date.now(), watchdog = null;
     const connect = () => {
       if (closed) return;
       ws = new WebSocket(`${binanceWs(sym)}/ws/${sym.ticker.toLowerCase()}@kline_${BIV[iv]}`);
       ws.onmessage = (ev) => {
+        lastMsg = Date.now();
         try {
           const k = JSON.parse(ev.data).k;
           onBar([{ t: k.t, o: +k.o, h: +k.h, l: +k.l, c: +k.c, v: +k.v }]);
@@ -122,7 +124,15 @@ export function subscribe(symId, iv, onBar, demo = false) {
       ws.onerror = () => { try { ws.close(); } catch (e) { /* */ } };
     };
     connect();
-    return { stop: () => { closed = true; try { ws && ws.close(); } catch (e) { /* */ } }, seed() {} };
+    // safety net: if the stream goes quiet, pull the latest candles over REST so the chart never freezes
+    watchdog = setInterval(async () => {
+      if (closed || Date.now() - lastMsg < 8000) return;
+      try {
+        const arr = await getJSON(`${binanceRest(sym)}/klines?symbol=${sym.ticker}&interval=${BIV[iv]}&limit=2`, 8000);
+        if (!closed) onBar(parseKlines(arr));
+      } catch (e) { /* ignore */ }
+    }, 3000);
+    return { stop: () => { closed = true; clearInterval(watchdog); try { ws && ws.close(); } catch (e) { /* */ } }, seed() {} };
   }
 
   // Yahoo / synthetic: poll recent bars
