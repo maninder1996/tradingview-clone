@@ -971,6 +971,7 @@ export class Chart extends Emitter {
     c.addEventListener('pointerdown', (e) => this.onDown(e));
     c.addEventListener('pointermove', (e) => this.onMove(e));
     c.addEventListener('pointerup', (e) => this.onUp(e));
+    c.addEventListener('pointercancel', (e) => { this.pinchEnd(e); this.drag = null; });
     c.addEventListener('pointerleave', () => { this.mouse.inside = false; this.hoverIdx = null; this.app.syncCrosshair(this, null); this.requestRender(); });
     c.addEventListener('wheel', (e) => this.onWheel(e), { passive: false });
     c.addEventListener('dblclick', (e) => this.onDbl(e));
@@ -996,8 +997,42 @@ export class Chart extends Emitter {
     return -1;
   }
 
+  // two-finger pinch zoom (touch)
+  pinchTrack(e, down) {
+    if (e.pointerType !== 'touch') return false;
+    this._touches ||= new Map();
+    const { x, y } = this.pos(e);
+    if (down) this._touches.set(e.pointerId, { x, y });
+    else if (this._touches.has(e.pointerId)) this._touches.set(e.pointerId, { x, y });
+    if (this._touches.size < 2) { return false; }
+    const [a, b] = [...this._touches.values()];
+    const dist = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+    const mx = (a.x + b.x) / 2;
+    if (!this._pinch) {
+      this.drag = null; this.creating = null;
+      this._pinch = { dist, sp: this.view.spacing, anchorI: this.x2i(Math.min(mx, this.plotW)) };
+      return true;
+    }
+    const p = this._pinch;
+    const ns = clamp(p.sp * (dist / p.dist), MIN_SPACING, MAX_SPACING);
+    const ax = Math.min(mx, this.plotW);
+    this.view.spacing = ns;
+    this.view.right = p.anchorI + (this.plotW - ax - ns / 2) / ns;
+    this.requestRender(); this.app.syncTime(this);
+    return true;
+  }
+  pinchEnd(e) {
+    if (this._touches) this._touches.delete(e.pointerId);
+    if (this._pinch && (!this._touches || this._touches.size < 2)) {
+      this._pinch = null; this.drag = null;
+      return true;
+    }
+    return false;
+  }
+
   onDown(e) {
     if (e.button === 2) return;
+    if (this.pinchTrack(e, true)) { try { this.canvas.setPointerCapture(e.pointerId); } catch (er) { /* */ } return; }
     this.app.setActive(this);
     const { x, y } = this.pos(e); const reg = this.region(x, y);
     this.canvas.setPointerCapture(e.pointerId);
@@ -1067,6 +1102,7 @@ export class Chart extends Emitter {
   }
 
   onMove(e) {
+    if (this._touches && this._touches.has(e.pointerId) && this.pinchTrack(e, false)) return;
     const { x, y } = this.pos(e);
     this.mouse = { x, y, inside: x < this.plotW && y < this.plotH };
     const dr = this.drag;
@@ -1128,6 +1164,7 @@ export class Chart extends Emitter {
     if (this.mouse.inside) this.app.syncCrosshair(this, this.idxToTime(Math.round(this.x2i(x))));
   }
   onUp(e) {
+    if (this.pinchEnd(e)) return;
     const { x, y } = this.pos(e);
     try { this.canvas.releasePointerCapture(e.pointerId); } catch (er) { /* */ }
     if (this.creating) {

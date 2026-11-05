@@ -287,6 +287,16 @@ export class App {
     const body = h('div', { class: 'workspace' }, this.leftbar, centerCol, this.rightPanel, this.rightRail);
     app.append(this.topbar, body, this.toastBox, this.modalRoot, this.popRoot);
 
+    this.mq = window.matchMedia('(max-width: 768px)');
+    if (this.mq.matches) { this.state.rightTab = null; this.state.bottomTab = null; }
+    this.mobileNav = h('nav', { class: 'mobile-nav' });
+    app.append(this.mobileNav);
+    this.renderMobileNav();
+    this.mq.addEventListener && this.mq.addEventListener('change', () => this.renderMobileNav());
+    // keep layout height right when the mobile browser URL bar shows/hides
+    const setVh = () => document.documentElement.style.setProperty('--vh', window.innerHeight * 0.01 + 'px');
+    setVh(); window.addEventListener('resize', setVh);
+
     this.renderTopbar();
     this.renderLeftbar();
     this.renderRightRail();
@@ -303,6 +313,63 @@ export class App {
       this.toast(`🔔 Alert Triggered: ${shortName(a.symbol)} ${a.condition.replace('_', ' ')} ${fmtPrice(a.price)}`, 'warn');
       if (this.state.rightTab === 'alerts') this.renderRightPanel();
     });
+  }
+
+  // ================================================================ Mobile bottom navigation (TradingView-app style)
+  renderMobileNav() {
+    const tab = this.state.rightTab;
+    const tools = document.body.classList.contains('m-tools');
+    const mk = (label, icon, active, onclick) => h('button', { class: 'mn-btn' + (active ? ' active' : ''), onclick },
+      h('span', { class: 'mn-ico', html: icon }), h('span', { class: 'mn-lbl' }, label));
+    const showTab = (id) => {
+      document.body.classList.remove('m-tools');
+      this.state.rightTab = this.state.rightTab === id ? null : id;
+      this.renderRightRail(); this.renderRightPanel(); this.renderMobileNav(); this.saveSoon();
+    };
+    this.mobileNav.innerHTML = '';
+    this.mobileNav.append(
+      mk('Watchlist', ICON.watchlist, tab === 'watchlist', () => showTab('watchlist')),
+      mk('Chart', ICON.ct_candles || ICON.indicator, !tab && !tools, () => {
+        document.body.classList.remove('m-tools');
+        this.state.rightTab = null; this.state.bottomTab = null;
+        this.renderRightRail(); this.renderRightPanel(); this.renderBottomBar(); this.renderBottomPanel(); this.renderMobileNav();
+      }),
+      mk('Tools', ICON.pencil, tools, () => {
+        this.state.rightTab = null; this.renderRightRail(); this.renderRightPanel();
+        document.body.classList.toggle('m-tools');
+        this.renderMobileNav();
+      }),
+      mk('Layouts', ICON.template, false, (e) => { document.body.classList.remove('m-tools'); this.openWorkspaceDropdown(e.currentTarget); }),
+      mk('Menu', ICON.indicator, false, (e) => this.openMobileMenu(e.currentTarget)),
+    );
+  }
+
+  openMobileMenu(anchor) {
+    const item = (label, fn) => h('div', { class: 'pop-item', onclick: () => { this.closePop(); fn(); } }, h('span', {}, label));
+    const menu = h('div', { class: 'pop-menu mobile-menu' },
+      item('Quick BUY 1 qty', () => this.quickTrade('buy')),
+      item('Quick SELL 1 qty', () => this.quickTrade('sell')),
+      h('div', { class: 'pop-sep' }),
+      item('Indicators', () => this.openIndicatorsModal()),
+      item('Templates', () => this.openTemplatesDropdown(anchor)),
+      item('Alerts', () => { document.body.classList.remove('m-tools'); this.state.rightTab = 'alerts'; this.renderRightRail(); this.renderRightPanel(); this.renderMobileNav(); }),
+      item('Layouts (saved)', () => this.openWorkspaceDropdown(anchor)),
+      item('Screener', () => { this.state.bottomTab = 'screener'; this.renderBottomBar(); this.renderBottomPanel(); this.renderMobileNav(); }),
+      item('Compare / Add Symbol', () => this.openCompareModal()),
+      item('Create Alert', () => this.openAlertModal()),
+      item('Bar Replay', () => this.toggleReplay()),
+      h('div', { class: 'pop-sep' }),
+      item('Object Tree', () => { this.state.rightTab = 'tree'; this.renderRightRail(); this.renderRightPanel(); this.renderMobileNav(); }),
+      item('Calculator', () => { this.state.rightTab = 'calc'; this.renderRightRail(); this.renderRightPanel(); this.renderMobileNav(); }),
+      item('Undo drawing', () => this.undoDrawing()),
+      item('Redo drawing', () => this.redoDrawing()),
+      h('div', { class: 'pop-sep' }),
+      item('Theme', () => this.openThemeDropdown(anchor)),
+      item('Settings', () => this.openSettingsModal()),
+      item('Snapshot', () => this.takeScreenshot()),
+      item('Log out', async () => { try { await fetch('/api/logout'); } catch (e) { /* */ } location.href = '/login.html'; }),
+    );
+    this.showPop(menu);
   }
 
   // ================================================================ Top Toolbar
@@ -410,10 +477,12 @@ export class App {
       h('button', { class: 'btn-buy-sm', title: 'Quick Market Buy 1 Qty', onclick: () => this.quickTrade('buy') }, 'BUY'),
     );
 
+    [compareBtn, marketsBtn, nogapBtn, tplBtn, alertBtn, replayBtn, undoBtn, redoBtn, savedBadge, layBtn, setBtn, themeBtn, snapBtn, fsBtn, logoutBtn]
+      .forEach((b) => b.classList.add('tb-desk'));
     const sep = () => h('div', { class: 'tb-sep' });
     this.topbar.append(
       symBtn, compareBtn, marketsBtn, sep(),
-      h('div', { class: 'tb-group tb-ws' },
+      h('div', { class: 'tb-group tb-ws tb-desk' },
         h('span', { class: 'tb-ws-lbl', title: `Active: ${ws.name}` }, 'Layout'),
         wsPick,
       ), sep(),
@@ -1647,7 +1716,7 @@ export class App {
     const r = btn.getBoundingClientRect();
     const item = (icon, text, fn, cls = '') => h('div', { class: 'pop-item ' + cls, style: { display: 'flex', alignItems: 'center', gap: '8px' }, onclick: () => { this.closePop(); fn(); } },
       h('span', { html: icon, style: { display: 'inline-flex', width: '16px', height: '16px' } }), h('span', {}, text));
-    const menu = h('div', { class: 'pop-menu', style: { left: r.left + 'px', top: r.bottom + 4 + 'px', minWidth: '220px' } },
+    const menu = h('div', { class: 'pop-menu' + (this.mq && this.mq.matches ? ' mobile-menu' : ''), style: { left: r.left + 'px', top: r.bottom + 4 + 'px', minWidth: '220px' } },
       h('div', { class: 'pop-sec' }, 'Layouts'),
       ...this.workspaces.map((w) => h('div', {
         class: 'pop-item' + (w.id === this.activeWorkspaceId ? ' active' : ''),
