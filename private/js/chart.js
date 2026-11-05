@@ -991,10 +991,20 @@ export class Chart extends Emitter {
     for (let k = list.length - 1; k >= 0; k--) { const d = list[k]; if (d.hidden) continue; const t = TOOLS[d.type]; try { if (t && t.hit(X, d, x, y)) return d; } catch (e) { /* */ } }
     return null;
   }
-  hitAnchor(d, x, y) {
+  hitAnchor(d, x, y, r = 8) {
     const tool = TOOLS[d.type]; const X = this.X; const an = tool.anchors ? tool.anchors(X, d) : d.pts.map(X.px);
-    for (let i = 0; i < an.length; i++) if (Math.hypot(an[i].x - x, an[i].y - y) < 8) return i;
-    return -1;
+    let best = -1, bd = r;
+    for (let i = 0; i < an.length; i++) { const dist = Math.hypot(an[i].x - x, an[i].y - y); if (dist < bd) { bd = dist; best = i; } }
+    return best;
+  }
+  // any visible, unlocked drawing whose resize handle is under the pointer (selected one wins)
+  handleUnder(x, y, r) {
+    if (this.app.state.drawingsHidden || this.app.state.drawingsLocked) return null;
+    const main = this.panes[0]; if (y > main.top + main.h) return null;
+    const list = this.drawings.filter((d) => !d.hidden && !d.locked && TOOLS[d.type]);
+    const order = this.selected && list.includes(this.selected) ? [this.selected, ...list.filter((d) => d !== this.selected).reverse()] : list.slice().reverse();
+    for (const d of order) { const i = this.hitAnchor(d, x, y, r); if (i >= 0) return { d, i }; }
+    return null;
   }
 
   // two-finger pinch zoom (touch)
@@ -1054,10 +1064,12 @@ export class Chart extends Emitter {
     const main = this.panes[0];
     if (TOOLS[tool] && y <= main.top + main.h) { this.createDown(x, y); return; }
     if (tool === 'eraser') { const d = this.hitDrawing(x, y); if (d) this.app.removeDrawing(this.state.symbol, d); return; }
-    // selection / editing
-    if (this.selected && !this.selected.locked && !this.app.state.drawingsLocked) {
-      const ai = this.hitAnchor(this.selected, x, y);
-      if (ai >= 0) { this.drag = { type: 'anchor', d: this.selected, i: ai, before: this.app.snapshot(this.state.symbol) }; return; }
+    // resize handles: grab any drawing's end/side dot directly (no need to select it first); bigger target for touch
+    const hu = this.handleUnder(x, y, e.pointerType === 'touch' ? 18 : 11);
+    if (hu) {
+      if (this.selected !== hu.d) { this.selected = hu.d; this.app.onSelectDrawing(this, hu.d); }
+      this.drag = { type: 'anchor', d: hu.d, i: hu.i, before: this.app.snapshot(this.state.symbol) };
+      this.requestRender(); return;
     }
     const d = this.hitDrawing(x, y);
     if (d) {
@@ -1156,7 +1168,7 @@ export class Chart extends Emitter {
       else if (!TOOLS[tool]) {
         const hd = this.hitDrawing(x, y);
         if (hd !== this.hoverDrawing) { this.hoverDrawing = hd; }
-        if (hd) cur = tool === 'eraser' ? 'not-allowed' : (this.selected === hd && this.hitAnchor(hd, x, y) >= 0 ? 'move' : 'pointer');
+        if (hd) cur = tool === 'eraser' ? 'not-allowed' : (this.hitAnchor(hd, x, y, 11) >= 0 ? 'move' : 'pointer');
         else if (tool === 'arrow') cur = 'default'; else if (tool === 'eraser') cur = 'cell';
         else if (tool === 'dot') cur = 'none';
       }
