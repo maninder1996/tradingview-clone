@@ -257,6 +257,64 @@ async function mapLimit(arr, n, fn) {
   return out;
 }
 
+// ---------------------------------------------------------------- cloud state (drawings, layouts, settings)
+// Per-user JSON blob. Turso (free, cloud SQLite) when TURSO_URL + TURSO_TOKEN are set; local file otherwise.
+const TURSO_URL = (process.env.TURSO_URL || '').replace(/^libsql:/, 'https:').replace(/\/+$/, '');
+const TURSO_TOKEN = process.env.TURSO_TOKEN || '';
+const STATE_FILE = path.join(__dirname, 'user-state.json');
+let tursoReady = false;
+async function turso(sql, args = []) {
+  const r = await fetch(TURSO_URL + '/v2/pipeline', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + TURSO_TOKEN, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ requests: [{ type: 'execute', stmt: { sql, args: args.map((v) => (typeof v === 'number' ? { type: 'integer', value: String(v) } : { type: 'text', value: String(v) })) } }, { type: 'close' }] }),
+  });
+  const j = await r.json();
+  const e = j.results && j.results[0];
+  if (!r.ok || !e || e.type === 'error') throw new Error((e && e.error && e.error.message) || 'turso error ' + r.status);
+  return e.response.result.rows;
+}
+async function stateGet(user) {
+  if (TURSO_URL && TURSO_TOKEN) {
+    if (!tursoReady) { await turso('CREATE TABLE IF NOT EXISTS user_state (user TEXT PRIMARY KEY, data TEXT NOT NULL, updated_at INTEGER NOT NULL)'); tursoReady = true; }
+    const rows = await turso('SELECT data, updated_at FROM user_state WHERE user = ?', [user]);
+    return rows.length ? { data: JSON.parse(rows[0][0].value), updatedAt: Number(rows[0][1].value) } : { data: null, updatedAt: 0 };
+  }
+  try { const all = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')); return all[user] || { data: null, updatedAt: 0 }; } catch (e) { return { data: null, updatedAt: 0 }; }
+}
+async function statePut(user, data) {
+  const updatedAt = Date.now();
+  if (TURSO_URL && TURSO_TOKEN) {
+    await stateGet(user); // ensures table exists
+    await turso('INSERT INTO user_state (user, data, updated_at) VALUES (?, ?, ?) ON CONFLICT(user) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at', [user, JSON.stringify(data), updatedAt]);
+  } else {
+    let all = {}; try { all = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')); } catch (e) { /* new */ }
+    all[user] = { data, updatedAt };
+    fs.writeFileSync(STATE_FILE, JSON.stringify(all));
+  }
+  return updatedAt;
+}
+function readRaw(req, max = 4e6) {
+  return new Promise((resolve, reject) => {
+    if (req.body !== undefined) return resolve(typeof req.body === 'string' ? req.body : Buffer.isBuffer(req.body) ? req.body.toString() : JSON.stringify(req.body));
+    let t = '';
+    req.on('data', (c) => { t += c; if (t.length > max) { req.destroy(); reject(new Error('too large')); } });
+    req.on('end', () => resolve(t));
+    req.on('error', reject);
+  });
+}
+async function stateApi(req, res, user) {
+  try {
+    if (req.method === 'GET') return send(res, 200, await stateGet(user));
+    if (req.method === 'PUT') {
+      const body = JSON.parse(await readRaw(req) || '{}');
+      if (!body.data || typeof body.data !== 'object') return send(res, 400, { error: 'bad body' });
+      return send(res, 200, { ok: true, updatedAt: await statePut(user, body.data) });
+    }
+    return send(res, 405, { error: 'method not allowed' });
+  } catch (e) { return send(res, 500, { error: String(e.message || e) }); }
+}
+
 // ---------------------------------------------------------------- http
 function send(res, code, body, type = 'application/json', extra = {}) {
   res.writeHead(code, { 'Content-Type': type, 'Cache-Control': 'no-store', ...extra });
@@ -372,6 +430,7 @@ async function handle(req, res) {
   if (p === '/api/logout') return send(res, 200, { ok: true }, 'application/json', { 'Set-Cookie': cookie(req, '', 0) });
   const user = sessionUser(req);
   if (p === '/api/me') return user ? send(res, 200, { user }) : send(res, 401, { error: 'login required' });
+  if (p === '/api/state') return user ? stateApi(req, res, user) : send(res, 401, { error: 'login required' });
   if (p.startsWith('/api/')) return user ? api(url, res) : send(res, 401, { error: 'login required' });
   if (p === '/login' || p === '/login.html') {
     if (user) return send(res, 302, '', 'text/plain', { Location: '/' });

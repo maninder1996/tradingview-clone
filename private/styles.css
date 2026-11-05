@@ -958,3 +958,11 @@ kbd {
   input, select, textarea { font-size: 16px; }
   .toast-container { right: 8px; left: 8px; bottom: calc(70px + env(safe-area-inset-bottom)); align-items: center; }
 }
+
+/* Desktop top bar: secondary items live in the Menu popover (mobile keeps its own compact bar) */
+@media (min-width: 769px) {
+  .topbar .tb-more { display: none !important; }
+}
+@media (max-width: 768px) {
+  .tb-menu-btn { display: none !important; }
+}

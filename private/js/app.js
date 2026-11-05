@@ -1,5 +1,5 @@
 // Main Application Controller: Multi-chart workspace, Topbar, Left Drawing Toolbar, Right Sidebar, Bottom Dock & Modals
-import { $, $$, h, clamp, uid, debounce, fmtPrice, fmtPct, fmtVol, fmtINRShort, fmtClock, fmtDateShort, signCls, INTERVALS, ivInfo, TIMEZONES, setTimezone, getTimezone, nseStatus, store, download } from './utils.js';
+import { $, $$, h, clamp, uid, debounce, fmtPrice, fmtPct, fmtVol, fmtINRShort, fmtClock, fmtDateShort, signCls, INTERVALS, ivInfo, TIMEZONES, setTimezone, getTimezone, nseStatus, store, cloud, download } from './utils.js';
 import { SYMBOLS, CATEGORIES, NIFTY50, getSymbol, fromYahoo, searchLocal, shortName, DEFAULT_WATCHLIST } from './symbols.js';
 import { quotes, searchRemote } from './data.js';
 import { INDICATORS, CATEGORY_ORDER, createIndicator, indicatorLabel } from './indicators.js';
@@ -479,23 +479,61 @@ export class App {
 
     [compareBtn, marketsBtn, nogapBtn, tplBtn, alertBtn, replayBtn, undoBtn, redoBtn, savedBadge, layBtn, setBtn, themeBtn, snapBtn, fsBtn, logoutBtn]
       .forEach((b) => b.classList.add('tb-desk'));
+    // Desktop: keep the top bar clean. Everything secondary lives in one "Menu" popover.
+    const menuBtn = h('button', { class: 'tb-btn tb-desk tb-menu-btn', title: 'Menu — Markets, Chart style, NoGap, Templates, Alert, Replay, Buy/Sell…', onclick: (e) => this.openTopMenu(e.currentTarget) },
+      h('span', { html: ICON.gear }), h('span', {}, 'Menu'), h('span', { class: 'chev', html: ICON.chevDown }));
+    [marketsBtn, ctBtn, nogapBtn, tplBtn, alertBtn, replayBtn, tradeQuick, layBtn, setBtn, themeBtn, snapBtn, fsBtn, logoutBtn]
+      .forEach((b) => b && b.classList && b.classList.add('tb-more'));
     const sep = () => h('div', { class: 'tb-sep' });
+    const sepM = () => h('div', { class: 'tb-sep tb-more' }); // separator that disappears with the hidden items
     this.topbar.append(
-      symBtn, compareBtn, marketsBtn, sep(),
-      h('div', { class: 'tb-group tb-ws tb-desk' },
+      symBtn, compareBtn, marketsBtn, sepM(),
+      h('div', { class: 'tb-group tb-ws tb-desk tb-more' },
         h('span', { class: 'tb-ws-lbl', title: `Active: ${ws.name}` }, 'Layout'),
         wsPick,
-      ), sep(),
+      ), sepM(),
       h('div', { class: 'tb-group' }, ...ivBtns, ivMore), sep(),
-      ctBtn, nogapBtn, sep(),
+      ctBtn, nogapBtn, sepM(),
       indBtn, tplBtn, sep(),
-      alertBtn, replayBtn, sep(),
+      alertBtn, replayBtn, sepM(),
       undoBtn, redoBtn,
       h('div', { class: 'tb-spacer' }),
-      savedBadge, sep(),
-      tradeQuick, sep(),
+      savedBadge, menuBtn, sepM(),
+      tradeQuick, sepM(),
       layBtn, setBtn, themeBtn, snapBtn, fsBtn, logoutBtn
     );
+  }
+
+  openTopMenu(btn) {
+    const r = btn.getBoundingClientRect();
+    const c = this.active;
+    const ct = c ? c.state.type : 'candles';
+    const ws = this.activeWorkspace();
+    const row = (icon, label, fn, active) => h('div', { class: 'pop-item' + (active ? ' active' : ''), style: { display: 'flex', alignItems: 'center', gap: '10px' }, onclick: fn },
+      h('span', { html: icon, style: { display: 'inline-flex', width: '18px' } }), h('span', {}, label));
+    const sub = (fn) => () => { this.closePop(); fn(btn); };
+    const menu = h('div', { class: 'pop-menu', style: { right: window.innerWidth - r.right + 'px', top: r.bottom + 4 + 'px', minWidth: '230px' } },
+      h('div', { class: 'pop-sec' }, 'Trade'),
+      h('div', { style: { display: 'flex', gap: '6px', padding: '2px 6px 6px' } },
+        h('button', { class: 'btn-buy-sm', style: { flex: 1 }, onclick: () => { this.closePop(); this.quickTrade('buy'); } }, 'BUY'),
+        h('button', { class: 'btn-sell-sm', style: { flex: 1 }, onclick: () => { this.closePop(); this.quickTrade('sell'); } }, 'SELL')),
+      h('div', { class: 'pop-sec' }, 'Chart'),
+      row(ICON.plus, 'Markets', sub((b) => this.openMarketsDropdown(b))),
+      row(ICON['ct_' + ct] || ICON.ct_candles, 'Chart style (Candles…)', sub((b) => this.openChartTypeDropdown(b))),
+      row(ICON.ct_nogap, ct === 'nogap' ? 'NoGap — ON' : 'NoGap', () => { this.closePop(); if (!c) return; c.setType(ct === 'nogap' ? 'candles' : 'nogap'); this.renderTopbar(); this.toast(ct === 'nogap' ? 'NoGap OFF' : 'NoGap ON — opens glued to prior close'); }, ct === 'nogap'),
+      row(ICON.template, 'Templates', sub((b) => this.openTemplatesDropdown(b))),
+      row(ICON.alert, 'Alert', () => { this.closePop(); this.openAlertModal(); }),
+      row(ICON.replay, 'Replay', () => { this.closePop(); this.toggleReplay(); }, !!(c && c.replay)),
+      h('div', { class: 'pop-sec' }, 'Workspace'),
+      row(ICON.template, 'Layout: ' + ws.name, sub((b) => this.openWorkspaceDropdown(b))),
+      row(ICON.fullscreen, 'Panel grid', sub((b) => this.openLayoutDropdown(b))),
+      row(ICON.gear, 'Settings', () => { this.closePop(); this.openSettingsModal(); }),
+      row(ICON.camera, 'Snapshot (PNG)', () => { this.closePop(); this.takeScreenshot(); }),
+      row(ICON.fullscreen, 'Fullscreen', () => { this.closePop(); this.toggleFullscreen(); }),
+      row(ICON.logout, 'Log out', async () => { try { await fetch('/api/logout'); } catch (e) { /* */ } location.href = '/login.html'; }),
+    );
+    this.closePop();
+    this.popRoot.append(menu);
   }
 
   // ================================================================ Left Drawing Toolbar
@@ -2177,6 +2215,7 @@ export class App {
   }
 }
 
-window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', async () => {
+  await Promise.race([cloud.pull(), new Promise((r) => setTimeout(r, 4000))]); // load drawings saved from other devices
   window.chartVista = new App();
 });

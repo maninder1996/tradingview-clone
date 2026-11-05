@@ -160,8 +160,50 @@ export function nseStatus(now = Date.now()) {
 const KEY = 'chartvista.v1.';
 export const store = {
   get(k, d) { try { const v = localStorage.getItem(KEY + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
-  set(k, v) { try { localStorage.setItem(KEY + k, JSON.stringify(v)); } catch (e) { /* quota */ } },
+  set(k, v) { try { localStorage.setItem(KEY + k, JSON.stringify(v)); localStorage.setItem(KEY + '_rev', String(Date.now())); cloud.push(); } catch (e) { /* quota */ } },
   del(k) { localStorage.removeItem(KEY + k); },
+};
+
+// Cloud sync: mirrors every store key to the server (/api/state) so drawings follow you across devices.
+export const cloud = {
+  _t: null, ok: false,
+  snapshot() {
+    const data = {};
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k.startsWith(KEY) && k !== KEY + '_rev') data[k.slice(KEY.length)] = localStorage.getItem(k);
+    }
+    return data;
+  },
+  push() {
+    if (!cloud.ok) return;
+    clearTimeout(cloud._t);
+    cloud._t = setTimeout(cloud.flush, 1500);
+  },
+  async flush() {
+    try {
+      const r = await fetch('/api/state', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data: cloud.snapshot() }), keepalive: true });
+      if (r.ok) localStorage.setItem(KEY + '_synced', String((await r.json()).updatedAt));
+    } catch (e) { /* offline: retried on next change */ }
+  },
+  // Call once before the app starts. Returns true if local data was replaced from the cloud.
+  async pull() {
+    try {
+      const r = await fetch('/api/state', { cache: 'no-store' });
+      if (!r.ok) return false;
+      const { data, updatedAt } = await r.json();
+      cloud.ok = true;
+      const localRev = Number(localStorage.getItem(KEY + '_rev') || 0);
+      const synced = Number(localStorage.getItem(KEY + '_synced') || 0);
+      if (data && updatedAt > synced && !(localRev > synced && localRev > updatedAt)) {
+        for (const k of Object.keys(data)) localStorage.setItem(KEY + k, data[k]);
+        localStorage.setItem(KEY + '_synced', String(updatedAt));
+        return true;
+      }
+      if (localRev > updatedAt) cloud.flush(); // local is newer (or cloud empty): upload it
+      return false;
+    } catch (e) { return false; }
+  },
 };
 
 // seeded RNG for demo data
