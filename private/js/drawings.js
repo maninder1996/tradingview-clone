@@ -53,6 +53,22 @@ export function roundRect(ctx, x, y, w, h, r) {
 }
 const inRect = (x, y, r) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
 const rectOf = (a, b) => ({ x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(b.x - a.x), h: Math.abs(b.y - a.y) });
+
+// 8 resize handles (4 corners + 4 edge midpoints) for box-shaped tools (rectangle, ellipse)
+const BOX_L = [0, 3, 7], BOX_R = [1, 2, 5], BOX_T = [0, 1, 4], BOX_B = [2, 3, 6];
+const boxAnchors = (X, d) => {
+  const r = rectOf(...d.pts.map(X.px)); const x1 = r.x + r.w, y1 = r.y + r.h, mx = r.x + r.w / 2, my = r.y + r.h / 2;
+  return [{ x: r.x, y: r.y }, { x: x1, y: r.y }, { x: x1, y: y1 }, { x: r.x, y: y1 }, { x: mx, y: r.y }, { x: x1, y: my }, { x: mx, y: y1 }, { x: r.x, y: my }];
+};
+const boxMoveAnchor = (d, i, pt) => {
+  let tMin = Math.min(d.pts[0].t, d.pts[1].t), tMax = Math.max(d.pts[0].t, d.pts[1].t);
+  let pMin = Math.min(d.pts[0].p, d.pts[1].p), pMax = Math.max(d.pts[0].p, d.pts[1].p);
+  if (BOX_L.includes(i)) tMin = Math.min(pt.t, tMax);
+  if (BOX_R.includes(i)) tMax = Math.max(pt.t, tMin);
+  if (BOX_T.includes(i)) pMax = Math.max(pt.p, pMin);
+  if (BOX_B.includes(i)) pMin = Math.min(pt.p, pMax);
+  d.pts = [{ t: tMin, p: pMax }, { t: tMax, p: pMin }];
+};
 const pct = (a, b) => ((b - a) / a) * 100;
 
 export const FIB_LEVELS = [
@@ -237,7 +253,7 @@ export const TOOLS = {
     hit(X, d, x) { const i0 = X.idx(d.pts[0].t), step = X.idx(d.pts[1].t) - i0; return FIB_TIME.some((k) => Math.abs(X.i2x(i0 + step * k) - x) < TOL); },
   },
   rect: {
-    name: 'Rectangle', npts: 2,
+    name: 'Rectangle', npts: 2, anchors: boxAnchors, moveAnchor: boxMoveAnchor,
     draw(ctx, X, d) {
       const r = rectOf(...d.pts.map(X.px));
       ctx.fillStyle = d.style.fill || alpha(d.style.color, 0.15); ctx.fillRect(r.x, r.y, r.w, r.h);
@@ -247,7 +263,7 @@ export const TOOLS = {
     hit(X, d, x, y) { const r = rectOf(...d.pts.map(X.px)); return inRect(x, y, { x: r.x - TOL, y: r.y - TOL, w: r.w + 2 * TOL, h: r.h + 2 * TOL }); },
   },
   ellipse: {
-    name: 'Ellipse', npts: 2,
+    name: 'Ellipse', npts: 2, anchors: boxAnchors, moveAnchor: boxMoveAnchor,
     draw(ctx, X, d) {
       const r = rectOf(...d.pts.map(X.px));
       ctx.beginPath(); ctx.ellipse(r.x + r.w / 2, r.y + r.h / 2, r.w / 2 || 1, r.h / 2 || 1, 0, 0, Math.PI * 2);

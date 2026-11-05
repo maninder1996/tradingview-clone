@@ -1062,6 +1062,9 @@ export class Chart extends Emitter {
     const d = this.hitDrawing(x, y);
     if (d) {
       this.selected = d; this.app.onSelectDrawing(this, d);
+      // grab a handle straight away (no need to select the drawing first)
+      const hai = !d.locked && !this.app.state.drawingsLocked ? this.hitAnchor(d, x, y) : -1;
+      if (hai >= 0) { this.drag = { type: 'anchor', d, i: hai, before: this.app.snapshot(this.state.symbol) }; this.requestRender(); return; }
       if (!d.locked && !this.app.state.drawingsLocked) this.drag = { type: 'move', d, start: this.ptAtRaw(x, y), orig: JSON.parse(JSON.stringify(d.pts)), before: this.app.snapshot(this.state.symbol), moved: false };
       this.requestRender(); return;
     }
