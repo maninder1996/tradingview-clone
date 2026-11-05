@@ -470,7 +470,7 @@ export class App {
     const snapBtn = h('button', { class: 'tb-btn icon-only', title: 'Download Chart Snapshot (PNG)', html: ICON.camera, onclick: () => this.takeScreenshot() });
     const fsBtn = h('button', { class: 'tb-btn icon-only', title: 'Fullscreen (F11)', html: ICON.fullscreen, onclick: () => this.toggleFullscreen() });
     const logoutBtn = h('button', { class: 'tb-btn icon-only', title: 'Log out', html: ICON.logout, onclick: async () => { try { await fetch('/api/logout'); } catch (e) { /* */ } location.href = '/login.html'; } });
-    const savedBadge = h('span', { class: 'tb-saved', title: 'Drawings & layouts auto-save to this browser' }, '●');
+    const savedBadge = h('span', { class: 'tb-saved', title: 'Drawings & layouts auto-save (click to save to the cloud now)', style: { cursor: 'pointer' }, onclick: () => this.saveToCloudNow() }, '●');
 
     const tradeQuick = h('div', { class: 'tb-trade' },
       h('button', { class: 'btn-sell-sm', title: 'Quick Market Sell 1 Qty', onclick: () => this.quickTrade('sell') }, 'SELL'),
@@ -504,6 +504,12 @@ export class App {
     );
   }
 
+  async saveToCloudNow() {
+    this.saveState();
+    const r = await cloud.flush();
+    this.toast(r.ok ? 'Saved to cloud ✓ — open the site on another device to see it' : 'Cloud save failed: ' + r.error, r.ok ? 'success' : 'warn');
+  }
+
   openTopMenu(btn) {
     const r = btn.getBoundingClientRect();
     const c = this.active;
@@ -513,6 +519,7 @@ export class App {
       h('span', { html: icon, style: { display: 'inline-flex', width: '18px' } }), h('span', {}, label));
     const sub = (fn) => () => { this.closePop(); fn(btn); };
     const menu = h('div', { class: 'pop-menu', style: { right: window.innerWidth - r.right + 'px', top: r.bottom + 4 + 'px', minWidth: '230px' } },
+      row(ICON.plus, 'Save to cloud now', () => { this.closePop(); this.saveToCloudNow(); }),
       h('div', { class: 'pop-sec' }, 'Trade'),
       h('div', { style: { display: 'flex', gap: '6px', padding: '2px 6px 6px' } },
         h('button', { class: 'btn-buy-sm', style: { flex: 1 }, onclick: () => { this.closePop(); this.quickTrade('buy'); } }, 'BUY'),

@@ -183,8 +183,11 @@ export const cloud = {
   async flush() {
     try {
       const r = await fetch('/api/state', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data: cloud.snapshot() }), keepalive: true });
-      if (r.ok) localStorage.setItem(KEY + '_synced', String((await r.json()).updatedAt));
-    } catch (e) { /* offline: retried on next change */ }
+      const j = await r.json().catch(() => ({}));
+      if (r.ok) { localStorage.setItem(KEY + '_synced', String(j.updatedAt)); cloud.lastError = ''; return { ok: true }; }
+      cloud.lastError = j.error || ('HTTP ' + r.status);
+    } catch (e) { cloud.lastError = String(e.message || e); /* offline: retried on next change */ }
+    return { ok: false, error: cloud.lastError };
   },
   // Call once before the app starts. Returns true if local data was replaced from the cloud.
   async pull() {
