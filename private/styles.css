@@ -853,6 +853,7 @@ kbd {
 
 /* ================================================================ Mobile app layout (TradingView-app style) */
 .mobile-nav { display: none; }
+.sym-strip { display: none; }
 
 @media (max-width: 768px) {
   html, body { height: calc(var(--vh, 1vh) * 100); position: fixed; inset: 0; overscroll-behavior: none; }
@@ -923,6 +924,23 @@ kbd {
   }
   .tr-body { flex-direction: column; overflow-y: auto; }
   .tr-ticket { width: 100%; min-width: 0; border-right: 0; border-bottom: 1px solid var(--border); }
+
+  /* symbol bar (TradingView-app style): swipe the symbol reel up/down */
+  .sym-strip {
+    display: flex; flex: none; align-items: center; gap: 2px; z-index: 40; height: 56px;
+    padding: 0 6px 0 12px; background: var(--panel-solid); border-top: 1px solid var(--border);
+  }
+  .sym-reel {
+    flex: 1; height: 56px; padding: 8px 0; box-sizing: border-box; overflow-y: auto; overflow-x: hidden;
+    scroll-snap-type: y mandatory; -webkit-overflow-scrolling: touch; touch-action: pan-y; overscroll-behavior: contain; scrollbar-width: none;
+    -webkit-mask-image: linear-gradient(transparent 0, #000 22%, #000 78%, transparent 100%); mask-image: linear-gradient(transparent 0, #000 22%, #000 78%, transparent 100%);
+  }
+  .sym-reel::-webkit-scrollbar { display: none; }
+  .reel-item { height: 40px; display: flex; align-items: center; gap: 8px; scroll-snap-align: center; scroll-snap-stop: always; color: var(--text-dim); }
+  .reel-item.active { color: var(--text); }
+  .ss-name { font-size: 17px; font-weight: 700; letter-spacing: .2px; }
+  .ss-pct { font-size: 11px; font-weight: 600; color: var(--text-dim); }
+  .ss-pct.up { color: var(--up); } .ss-pct.down { color: var(--down); }
 
   /* bottom navigation */
   .mobile-nav {

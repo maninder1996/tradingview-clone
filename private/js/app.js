@@ -289,8 +289,9 @@ export class App {
 
     this.mq = window.matchMedia('(max-width: 768px)');
     if (this.mq.matches) { this.state.rightTab = null; this.state.bottomTab = null; }
+    this.symStrip = h('div', { class: 'sym-strip' }); // mobile: touch-scrollable quick symbols above the bottom bar
     this.mobileNav = h('nav', { class: 'mobile-nav' });
-    app.append(this.mobileNav);
+    app.append(this.symStrip, this.mobileNav);
     this.renderMobileNav();
     this.mq.addEventListener && this.mq.addEventListener('change', () => this.renderMobileNav());
     // keep layout height right when the mobile browser URL bar shows/hides
@@ -313,6 +314,69 @@ export class App {
       this.toast(`🔔 Alert Triggered: ${shortName(a.symbol)} ${a.condition.replace('_', ' ')} ${fmtPrice(a.price)}`, 'warn');
       if (this.state.rightTab === 'alerts') this.renderRightPanel();
     });
+  }
+
+  // ================================================================ Mobile symbol bar (TradingView-app style)
+  // Vertical "reel": swipe up/down to flip through your watchlist symbols (Gold, BTC…).
+  reelIds() {
+    const ids = this.watchlist.filter((x) => typeof x === 'string');
+    const cur = this.active && this.active.state.symbol;
+    return cur && !ids.includes(cur) ? [cur, ...ids] : ids;
+  }
+
+  renderSymStrip() {
+    if (!this.symStrip) return;
+    const ids = this.reelIds();
+    const sig = ids.join('|');
+    if (sig === this._symStripSig && this.reelEl) { this.updateSymStripActive(); return; }
+    this._symStripSig = sig;
+    const ITEM = 40;
+    this.symChips = new Map();
+    this.symIds = ids;
+    const reel = this.reelEl = h('div', { class: 'sym-reel' });
+    for (const id of ids) {
+      const pctEl = h('span', { class: 'ss-pct' }, '');
+      const item = h('div', { class: 'reel-item', onclick: () => reel.scrollTo({ top: this.symIds.indexOf(id) * ITEM, behavior: 'smooth' }) },
+        h('b', { class: 'ss-name' }, shortName(id)), pctEl);
+      this.symChips.set(id, { chip: item, pctEl });
+      reel.append(item);
+      const q = quotes.get(id);
+      if (q) this.paintSymChip(id, q);
+    }
+    let t = null;
+    reel.addEventListener('scroll', () => {
+      if (this._reelSilent) return;
+      clearTimeout(t);
+      t = setTimeout(() => {
+        const id = this.symIds[Math.max(0, Math.min(this.symIds.length - 1, Math.round(reel.scrollTop / ITEM)))];
+        const cur = this.active && this.active.state.symbol;
+        if (id && id !== cur) this.setSymbolOnActive(id);
+      }, 160);
+    }, { passive: true });
+
+    this.symStrip.innerHTML = '';
+    this.symStrip.append(reel);
+    this.updateSymStripActive(true);
+  }
+
+  updateSymStripActive(force) {
+    if (!this.symChips || !this.reelEl) return;
+    const cur = this.active && this.active.state.symbol;
+    if (cur && !this.symChips.has(cur)) { this._symStripSig = null; this.renderSymStrip(); return; }
+    for (const [id, r] of this.symChips) r.chip.classList.toggle('active', id === cur);
+    const idx = this.symIds.indexOf(cur);
+    if (idx >= 0 && (force || Math.abs(this.reelEl.scrollTop - idx * 40) > 2)) {
+      this._reelSilent = true;
+      this.reelEl.scrollTo({ top: idx * 40, behavior: force ? 'auto' : 'smooth' });
+      setTimeout(() => { this._reelSilent = false; }, force ? 80 : 450);
+    }
+  }
+
+  paintSymChip(id, q) {
+    const r = this.symChips && this.symChips.get(id);
+    if (!r || !q || q.price == null) return;
+    r.pctEl.textContent = fmtPct(q.changePct);
+    r.pctEl.className = 'ss-pct ' + signCls(q.change);
   }
 
   // ================================================================ Mobile bottom navigation (TradingView-app style)
@@ -684,7 +748,7 @@ export class App {
     for (let i = 0; i < lay.n; i++) {
       const st = prevStates[i] || DEFAULT_PRESET_CHARTS[i % DEFAULT_PRESET_CHARTS.length];
       const chart = new Chart(this, this.gridEl, st);
-      chart.on('change', () => { if (this.active === chart) { this.renderTopbar(); this.renderRightPanel(); } });
+      chart.on('change', () => { if (this.active === chart) { this.renderTopbar(); this.renderRightPanel(); this.updateSymStripActive(); } });
       chart.on('indicators', () => { if (this.state.rightTab === 'tree') this.renderRightPanel(); });
       chart.on('replay', () => this.renderReplayBar());
       this.charts.push(chart);
@@ -702,6 +766,7 @@ export class App {
     this.renderTopbar();
     this.renderReplayBar();
     this.renderRightPanel();
+    this.updateSymStripActive();
     if (this.state.bottomTab === 'trading') this.renderBottomPanel();
   }
 
@@ -965,6 +1030,7 @@ export class App {
     const alertSyms = this.alertsMgr.alerts.filter((a) => a.active).map((a) => a.symbol);
     const calcSyms = ['FX:USDINR', 'COMEX:GC1!', 'COMEX:SI1!', 'BINANCE:BTCUSDT', 'INR:GOLD10G', 'INR:SILVER1KG'];
     quotes.setInterest('main', [...new Set([...wlSyms, ...chartSyms, ...posSyms, ...alertSyms, ...calcSyms])]);
+    this.renderSymStrip();
   }
 
   renderWatchlistTab() {
@@ -1051,6 +1117,7 @@ export class App {
 
   onQuoteUpdate(id, q, prev) {
     this.paintWlRow(id, q, prev);
+    this.paintSymChip(id, q);
     if (this.active && this.active.state.symbol === id && this.detailsBox) this.updateDetailsPane();
     if (this.state.rightTab === 'calc') this.updateCalcLive();
   }
