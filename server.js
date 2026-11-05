@@ -25,7 +25,7 @@ const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,
 
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
-  '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.woff2': 'font/woff2',
+  '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.woff2': 'font/woff2', '.webmanifest': 'application/manifest+json',
 };
 
 // interval -> yahoo params
@@ -428,6 +428,8 @@ async function handle(req, res) {
   if (p === '/api/health') return send(res, 200, { ok: true, time: Date.now() });
   if (p === '/api/login' && req.method === 'POST') return login(req, res);
   if (p === '/api/logout') return send(res, 200, { ok: true }, 'application/json', { 'Set-Cookie': cookie(req, '', 0) });
+  // PWA files must be reachable without a session (the browser fetches them before/while logging in)
+  if (['/manifest.webmanifest', '/sw.js', '/icon-192.png', '/icon-512.png', '/apple-touch-icon.png'].includes(p)) return serveFile(res, PUB, p);
   const user = sessionUser(req);
   if (p === '/api/me') return user ? send(res, 200, { user }) : send(res, 401, { error: 'login required' });
   if (p === '/api/state') return user ? stateApi(req, res, user) : send(res, 401, { error: 'login required' });

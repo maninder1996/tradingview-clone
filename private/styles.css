@@ -959,7 +959,7 @@ kbd {
   /* popups & modals */
   .pop-menu:not(.mobile-menu) { left: 8px !important; right: 8px; width: auto !important; min-width: 0; max-width: none; top: 52px !important; max-height: calc(var(--vh, 1vh) * 100 - 130px); }
   .chart-favbar { display: none !important; }
-  .lg-row { display: none; }
+  .lg-row, .lg-main, .lg-ohlc { display: none; } /* phone: free the chart area (symbol + % are in the bottom symbol bar) */
   .tb-trade { display: none; }
   .pop-menu.mobile-menu {
     left: 8px !important; right: 8px; top: auto !important;
