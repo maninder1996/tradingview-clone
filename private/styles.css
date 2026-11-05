@@ -984,3 +984,6 @@ kbd {
 @media (max-width: 768px) {
   .tb-menu-btn { display: none !important; }
 }
+
+/* Bottom bar is hidden; its items (ranges, panels, log/auto, clock) live in the top-bar Menu */
+.bottom-bar { display: none !important; }

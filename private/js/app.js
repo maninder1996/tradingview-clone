@@ -90,6 +90,17 @@ const TEMPLATES = [
   { name: 'Volume Profile + Pivot Points', inds: [{ t: 'vol' }, { t: 'vpvr' }, { t: 'pivots' }] },
 ];
 
+const QUICK_RANGES = [
+  { lbl: '1D', iv: '5m', bars: 78 },
+  { lbl: '5D', iv: '15m', bars: 130 },
+  { lbl: '1M', iv: '1h', bars: 180 },
+  { lbl: '3M', iv: '1D', bars: 65 },
+  { lbl: '6M', iv: '1D', bars: 130 },
+  { lbl: '1Y', iv: '1D', bars: 252 },
+  { lbl: '5Y', iv: '1W', bars: 260 },
+  { lbl: 'All', iv: '1M', bars: 300 },
+];
+
 export class App {
   constructor() {
     const savedSettings = store.get('settings', {});
@@ -582,6 +593,7 @@ export class App {
     const row = (icon, label, fn, active) => h('div', { class: 'pop-item' + (active ? ' active' : ''), style: { display: 'flex', alignItems: 'center', gap: '10px' }, onclick: fn },
       h('span', { html: icon, style: { display: 'inline-flex', width: '18px' } }), h('span', {}, label));
     const sub = (fn) => () => { this.closePop(); fn(btn); };
+    const toggleTab = (id) => { this.state.bottomTab = this.state.bottomTab === id ? null : id; this.renderBottomBar(); this.renderBottomPanel(); this.saveSoon(); };
     const menu = h('div', { class: 'pop-menu', style: { right: window.innerWidth - r.right + 'px', top: r.bottom + 4 + 'px', minWidth: '230px' } },
       row(ICON.plus, 'Save to cloud now', () => { this.closePop(); this.saveToCloudNow(); }),
       h('div', { class: 'pop-sec' }, 'Trade'),
@@ -595,6 +607,16 @@ export class App {
       row(ICON.template, 'Templates', sub((b) => this.openTemplatesDropdown(b))),
       row(ICON.alert, 'Alert', () => { this.closePop(); this.openAlertModal(); }),
       row(ICON.replay, 'Replay', () => { this.closePop(); this.toggleReplay(); }, !!(c && c.replay)),
+      h('div', { class: 'pop-sec' }, 'Range'),
+      h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '4px', padding: '2px 6px 6px' } },
+        ...QUICK_RANGES.map((r) => h('button', { class: 'tb-pill', title: `Switch to ${r.lbl} view`, onclick: () => { this.closePop(); this.applyQuickRange(r); } }, r.lbl))),
+      h('div', { class: 'pop-sec' }, 'Panels & scale'),
+      row(ICON.template, 'Paper Trading', () => { this.closePop(); toggleTab('trading'); }, this.state.bottomTab === 'trading'),
+      row(ICON.template, 'Stock / Crypto Screener', () => { this.closePop(); toggleTab('screener'); }, this.state.bottomTab === 'screener'),
+      row(ICON.indicator, 'Pine Script Editor', () => { this.closePop(); toggleTab('pine'); }, this.state.bottomTab === 'pine'),
+      row(ICON.indicator, 'Log scale', () => { this.closePop(); if (c) c.toggleLog(); }, !!(c && c.state.logScale)),
+      row(ICON.fullscreen, 'Auto-fit scale', () => { this.closePop(); if (c) c.resetView(); }),
+      row(ICON.alert, `NSE ${nseStatus(Date.now()).label} · ${fmtClock(Date.now())} — time zone…`, () => { this.closePop(); this.openTimezoneMenu({ getBoundingClientRect: () => ({ right: window.innerWidth - 12, top: window.innerHeight - 40 }) }); }),
       h('div', { class: 'pop-sec' }, 'Workspace'),
       row(ICON.template, 'Layout: ' + ws.name, sub((b) => this.openWorkspaceDropdown(b))),
       row(ICON.fullscreen, 'Panel grid', sub((b) => this.openLayoutDropdown(b))),
@@ -1325,16 +1347,7 @@ export class App {
   // ================================================================ Bottom Status Bar & Dock
   renderBottomBar() {
     this.bottomBar.innerHTML = '';
-    const ranges = [
-      { lbl: '1D', iv: '5m', bars: 78 },
-      { lbl: '5D', iv: '15m', bars: 130 },
-      { lbl: '1M', iv: '1h', bars: 180 },
-      { lbl: '3M', iv: '1D', bars: 65 },
-      { lbl: '6M', iv: '1D', bars: 130 },
-      { lbl: '1Y', iv: '1D', bars: 252 },
-      { lbl: '5Y', iv: '1W', bars: 260 },
-      { lbl: 'All', iv: '1M', bars: 300 },
-    ];
+    const ranges = QUICK_RANGES;
     const rangeGroup = h('div', { class: 'bb-ranges' },
       ...ranges.map((r) => h('button', {
         class: 'bb-btn',
