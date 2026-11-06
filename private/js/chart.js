@@ -76,6 +76,9 @@ export class Chart extends Emitter {
     mount.append(this.root);
     this.ctx = this.canvas.getContext('2d');
     this.ro = new ResizeObserver(() => { this.resize(); this.applyFavPos(); });
+    // mobile/PWA: when the app returns from background its streams are dead — re-sync candles & scale
+    this._onVis = () => { if (document.visibilityState === 'visible' && this.bars && this.bars.length && !this.loading && this.root.isConnected) { this.resize(); this.load(); } };
+    document.addEventListener('visibilitychange', this._onVis);
     this.ro.observe(this.root);
     this.bindEvents();
     this.buildFavBar();
@@ -192,7 +195,7 @@ export class Chart extends Emitter {
     this.render();
   }
   destroy() {
-    this.sub && this.sub.stop(); this.ro.disconnect(); clearInterval(this._tick); clearInterval(this.replayTimer); this.root.remove();
+    document.removeEventListener('visibilitychange', this._onVis); this.sub && this.sub.stop(); this.ro.disconnect(); clearInterval(this._tick); clearInterval(this.replayTimer); this.root.remove();
   }
 
   // ------------------------------------------------------------------ state
@@ -215,11 +218,14 @@ export class Chart extends Emitter {
     const { symbol, interval } = this.state;
     const token = (this._loadToken = uid());
     this.sub && this.sub.stop(); this.sub = null;
+    // drop the previous symbol's candles + price scale right away so they can never be drawn/scaled against the new symbol
+    if (this._loadedSymbol !== symbol) { this.bars = []; this.ver++; this.indCache.clear(); this.scales = {}; }
     this.loading = true; this.showStatus(`Loading ${shortName(symbol)} · ${ivInfo(interval).short}…`);
     this.buildLegend();
     const res = await getBars(symbol, interval);
     if (token !== this._loadToken) return;
     this.loading = false;
+    this._loadedSymbol = symbol;
     this.bars = res.bars; this.ver++; this.indCache.clear(); this.source = res.source; this.demo = !!res.demo;
     this.noMore = false;
     this.replay = null;
@@ -227,7 +233,7 @@ export class Chart extends Emitter {
     this.hideStatus();
     this.buildLegend();
     this.loadCompares();
-    this.sub = subscribe(symbol, interval, (arr) => this.merge(arr), this.demo);
+    this.sub = subscribe(symbol, interval, (arr) => { if (token === this._loadToken) this.merge(arr); }, this.demo);
     if (this.demo && this.bars.length) this.sub.seed(this.bars[this.bars.length - 1]);
     const last = this.bars[this.bars.length - 1];
     if (last) quotes.push(symbol, last.c);
@@ -239,6 +245,10 @@ export class Chart extends Emitter {
 
   merge(arr) {
     if (!this.bars.length) return;
+    // ignore malformed / foreign ticks (e.g. another symbol's price) that would blow up the auto-scale and squash candles to 1px
+    const ref = this.bars[this.bars.length - 1].c;
+    arr = arr.filter((b) => b && [b.o, b.h, b.l, b.c].every((v) => isFinite(v) && v > 0) && Math.abs(b.c / ref - 1) < 0.5);
+    if (!arr.length) return;
     const atEnd = this.view.right >= this.bars.length - 2;
     let added = 0;
     for (const b of arr) {

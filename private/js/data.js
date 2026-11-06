@@ -114,6 +114,7 @@ export function subscribe(symId, iv, onBar, demo = false) {
       if (closed) return;
       ws = new WebSocket(`${binanceWs(sym)}/ws/${sym.ticker.toLowerCase()}@kline_${BIV[iv]}`);
       ws.onmessage = (ev) => {
+        if (closed) return;
         lastMsg = Date.now();
         try {
           const k = JSON.parse(ev.data).k;

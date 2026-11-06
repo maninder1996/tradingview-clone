@@ -545,6 +545,7 @@ export class App {
     const snapBtn = h('button', { class: 'tb-btn icon-only', title: 'Download Chart Snapshot (PNG)', html: ICON.camera, onclick: () => this.takeScreenshot() });
     const fsBtn = h('button', { class: 'tb-btn icon-only', title: 'Fullscreen (F11)', html: ICON.fullscreen, onclick: () => this.toggleFullscreen() });
     const logoutBtn = h('button', { class: 'tb-btn icon-only', title: 'Log out', html: ICON.logout, onclick: async () => { try { await fetch('/api/logout'); } catch (e) { /* */ } location.href = '/login.html'; } });
+    const refreshBtn = h('button', { class: 'tb-btn icon-only tb-refresh', title: 'Refresh chart (reload data & auto-fit)', html: ICON.refresh, onclick: () => this.refreshActiveChart() });
     const savedBadge = h('span', { class: 'tb-saved', title: 'Drawings & layouts auto-save (click to save to the cloud now)', style: { cursor: 'pointer' }, onclick: () => this.saveToCloudNow() }, '●');
 
     const tradeQuick = h('div', { class: 'tb-trade' },
@@ -573,10 +574,16 @@ export class App {
       alertBtn, replayBtn, sepM(),
       undoBtn, redoBtn,
       h('div', { class: 'tb-spacer' }),
-      savedBadge, menuBtn, sepM(),
+      refreshBtn, savedBadge, menuBtn, sepM(),
       tradeQuick, sepM(),
       layBtn, setBtn, themeBtn, snapBtn, fsBtn, logoutBtn
     );
+  }
+
+  refreshActiveChart() {
+    const c = this.active; if (!c) return;
+    c.noMore = false; c.load();
+    this.toast && this.toast('Chart refreshed', 'success');
   }
 
   async saveToCloudNow() {
