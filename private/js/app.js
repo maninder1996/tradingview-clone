@@ -386,10 +386,7 @@ export class App {
 
   buildStripActions() {
     const ib = (html, title, fn, cls = '') => h('button', { class: 'ss-btn ' + cls, title, html, onclick: fn });
-    this.ivLbl = h('span', {}, this.active ? ivInfo(this.active.state.interval).short : '');
-    const ivBtn = h('button', { class: 'ss-btn ss-iv', title: 'Timeframe', onclick: (e) => this.openIntervalDropdown(e.currentTarget) }, this.ivLbl);
     return h('div', { class: 'ss-acts' },
-      ivBtn,
       ib(ICON.watchlist, 'Watchlist', () => this.mobileShowTab('watchlist')),
       ib(ICON.pencil, 'Analysis hub', () => this.openAnalysisHub()),
       ib(ICON.indicator, 'Indicators', () => this.openIndicatorsModal()),
