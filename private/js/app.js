@@ -341,7 +341,7 @@ export class App {
     const sig = ids.join('|');
     if (sig === this._symStripSig && this.reelEl) { this.updateSymStripActive(); return; }
     this._symStripSig = sig;
-    const ITEM = 40;
+    const ITEM = this.REEL_ITEM = 22;
     this.symChips = new Map();
     this.symIds = ids;
     const reel = this.reelEl = h('div', { class: 'sym-reel' });
@@ -366,21 +366,113 @@ export class App {
     }, { passive: true });
 
     this.symStrip.innerHTML = '';
-    this.symStrip.append(reel);
+    this.symStrip.append(reel, this.stripActs || (this.stripActs = this.buildStripActions()));
     this.updateSymStripActive(true);
   }
 
   updateSymStripActive(force) {
     if (!this.symChips || !this.reelEl) return;
     const cur = this.active && this.active.state.symbol;
+    if (this.ivLbl && this.active) this.ivLbl.textContent = ivInfo(this.active.state.interval).short;
     if (cur && !this.symChips.has(cur)) { this._symStripSig = null; this.renderSymStrip(); return; }
     for (const [id, r] of this.symChips) r.chip.classList.toggle('active', id === cur);
     const idx = this.symIds.indexOf(cur);
-    if (idx >= 0 && (force || Math.abs(this.reelEl.scrollTop - idx * 40) > 2)) {
+    if (idx >= 0 && (force || Math.abs(this.reelEl.scrollTop - idx * this.REEL_ITEM) > 2)) {
       this._reelSilent = true;
-      this.reelEl.scrollTo({ top: idx * 40, behavior: force ? 'auto' : 'smooth' });
+      this.reelEl.scrollTo({ top: idx * this.REEL_ITEM, behavior: force ? 'auto' : 'smooth' });
       setTimeout(() => { this._reelSilent = false; }, force ? 80 : 450);
     }
+  }
+
+  buildStripActions() {
+    const ib = (html, title, fn, cls = '') => h('button', { class: 'ss-btn ' + cls, title, html, onclick: fn });
+    this.ivLbl = h('span', {}, this.active ? ivInfo(this.active.state.interval).short : '');
+    const ivBtn = h('button', { class: 'ss-btn ss-iv', title: 'Timeframe', onclick: (e) => this.openIntervalDropdown(e.currentTarget) }, this.ivLbl);
+    return h('div', { class: 'ss-acts' },
+      ivBtn,
+      ib(ICON.watchlist, 'Watchlist', () => this.mobileShowTab('watchlist')),
+      ib(ICON.pencil, 'Analysis hub', () => this.openAnalysisHub()),
+      ib(ICON.indicator, 'Indicators', () => this.openIndicatorsModal()),
+    );
+  }
+
+  mobileShowTab(id) {
+    document.body.classList.remove('m-tools');
+    this.state.rightTab = this.state.rightTab === id ? null : id;
+    this.renderRightRail(); this.renderRightPanel(); this.renderMobileNav(); this.saveSoon();
+  }
+
+  /** Bottom sheet (mobile): title + scrollable body */
+  openSheet(title, ...body) {
+    const sheet = h('div', { class: 'm-sheet' },
+      h('div', { class: 'ms-grab' }),
+      h('div', { class: 'ms-head' }, h('div', { class: 'ms-title' }, title), h('button', { class: 'ms-x', html: ICON.close, onclick: () => this.closePop() })),
+      h('div', { class: 'ms-body' }, ...body));
+    this.showPop(sheet);
+    return sheet;
+  }
+
+  openAnalysisHub() {
+    const anchor = this.symStrip;
+    const tile = (icon, label, fn, cls = '') => h('button', { class: 'ms-tile ' + cls, onclick: () => { this.closePop(); fn(); } },
+      h('span', { class: 'ms-ico', html: icon }), h('span', {}, label));
+    const grid = (...t) => h('div', { class: 'ms-grid' }, ...t);
+    const openTab = (id) => () => { document.body.classList.remove('m-tools'); this.state.rightTab = id; this.renderRightRail(); this.renderRightPanel(); this.renderMobileNav(); };
+    this.openSheet('Analysis hub',
+      grid(
+        tile(ICON.template, 'Layout setup', () => this.openLayoutDropdown(anchor)),
+        tile(ICON.gear, 'Chart settings', () => this.openSettingsModal()),
+        tile(ICON.plus, 'Save', () => this.saveToCloudNow()),
+        tile(ICON.template, 'Layouts', () => this.openWorkspaceDropdown(anchor)),
+      ),
+      h('div', { class: 'ms-sec' }, 'Trade'),
+      h('div', { class: 'ms-trade' },
+        h('button', { class: 'btn-sell-sm', onclick: () => { this.closePop(); this.quickTrade('sell'); } }, 'SELL 1'),
+        h('button', { class: 'btn-buy-sm', onclick: () => { this.closePop(); this.quickTrade('buy'); } }, 'BUY 1')),
+      h('div', { class: 'ms-sec' }, 'Tools'),
+      grid(
+        tile(ICON.indicator, 'Indicators', () => this.openIndicatorsModal()),
+        tile(ICON.plus, 'Compare', () => this.openCompareModal()),
+        tile(ICON.alert, 'Alerts', openTab('alerts')),
+        tile(ICON.replay, 'Bar Replay', () => this.toggleReplay()),
+        tile(ICON.template, 'Templates', () => this.openTemplatesDropdown(anchor)),
+        tile(ICON['ct_' + (this.active ? this.active.state.type : 'candles')] || ICON.ct_candles, 'Chart type', () => this.openChartTypeDropdown(anchor)),
+        tile(ICON.tree, 'Object Tree', openTab('tree')),
+        tile(ICON.calc, 'Calculator', openTab('calc')),
+        tile(ICON.alert, 'Create alert', () => this.openAlertModal()),
+        tile(ICON.watchlist, 'Screener', () => { this.state.bottomTab = 'screener'; this.renderBottomBar(); this.renderBottomPanel(); }),
+      ),
+      h('div', { class: 'ms-sec' }, 'More'),
+      grid(
+        tile(ICON.undo, 'Undo drawing', () => this.undoDrawing()),
+        tile(ICON.redo, 'Redo drawing', () => this.redoDrawing()),
+        tile(ICON.camera, 'Snapshot', () => this.takeScreenshot()),
+        tile(ICON.fullscreen, 'Auto-fit scale', () => this.active && this.active.resetView()),
+        tile(ICON.gear, 'Theme', () => this.openThemeDropdown(anchor)),
+        tile(ICON.logout, 'Log out', async () => { try { await fetch('/api/logout'); } catch (e) { /* */ } location.href = '/login.html'; }),
+      ),
+    );
+  }
+
+  /** Drawings bottom sheet (mobile): search + category tabs + tool tiles */
+  openDrawingsSheet() {
+    const CATS = { cursor: 'Cursors', lines: 'Trend tools', channels: 'Channels', fib: 'Fibonacci', shapes: 'Shapes', text: 'Text & marks', projection: 'Projection' };
+    let cat = 'lines', q = '';
+    const tabs = h('div', { class: 'ms-tabs' });
+    const grid = h('div', { class: 'ms-grid' });
+    const search = h('input', { class: 'ms-search', type: 'text', placeholder: 'Search drawings', oninput: () => { q = search.value.trim().toLowerCase(); paint(); } });
+    const paint = () => {
+      tabs.innerHTML = ''; grid.innerHTML = '';
+      for (const g of TOOL_GROUPS) tabs.append(h('button', { class: 'ms-tab' + (!q && g.id === cat ? ' active' : ''), onclick: () => { cat = g.id; q = ''; search.value = ''; paint(); } }, CATS[g.id] || g.id));
+      const ids = q ? TOOL_GROUPS.flatMap((g) => g.items).filter((id) => toolName(id).toLowerCase().includes(q)) : (TOOL_GROUPS.find((g) => g.id === cat) || TOOL_GROUPS[0]).items;
+      for (const id of ids) {
+        grid.append(h('button', { class: 'ms-tile' + (this.state.tool === id ? ' active' : ''), onclick: () => { this.setTool(id); this.closePop(); } },
+          h('span', { class: 'ms-ico', html: ICON['t_' + id] || ICON.pencil }), h('span', {}, toolName(id))));
+      }
+      if (!ids.length) grid.append(h('div', { class: 'ms-empty' }, 'No tools found'));
+    };
+    this.openSheet('Drawings', search, tabs, grid);
+    paint();
   }
 
   paintSymChip(id, q) {
@@ -410,9 +502,10 @@ export class App {
         this.renderRightRail(); this.renderRightPanel(); this.renderBottomBar(); this.renderBottomPanel(); this.renderMobileNav();
       }),
       mk('Tools', ICON.pencil, tools, () => {
+        document.body.classList.remove('m-tools');
         this.state.rightTab = null; this.renderRightRail(); this.renderRightPanel();
-        document.body.classList.toggle('m-tools');
         this.renderMobileNav();
+        this.openDrawingsSheet();
       }),
       mk('Layouts', ICON.template, false, (e) => { document.body.classList.remove('m-tools'); this.openWorkspaceDropdown(e.currentTarget); }),
       mk('Menu', ICON.indicator, false, (e) => this.openMobileMenu(e.currentTarget)),
