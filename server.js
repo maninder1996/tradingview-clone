@@ -164,6 +164,19 @@ function aggregateMs(bars, ms) {
   return out;
 }
 
+// Yahoo's trailing "live" bar can carry an off-grid timestamp (last trade time). Each poll then looked like a brand-new
+// flat o=h=l=c candle (1px dash). Fold any bar that starts inside the previous bar's period into that bar.
+function foldOffGrid(bars, ms) {
+  const out = [];
+  for (const b of bars) {
+    const prev = out[out.length - 1];
+    if (prev && b.t - prev.t < ms) {
+      prev.h = Math.max(prev.h, b.h); prev.l = Math.min(prev.l, b.l); prev.c = b.c; prev.v = Math.max(prev.v || 0, b.v || 0);
+    } else out.push({ ...b });
+  }
+  return out;
+}
+
 async function yahooHistory(symbol, iv, latest) {
   const cfg = IV[iv] || IV['1D'];
   const range = latest ? cfg.latest : cfg.range;
@@ -175,6 +188,7 @@ async function yahooHistory(symbol, iv, latest) {
     if (cfg.aggMs) out = aggregateMs(bars, cfg.aggMs);
     if (cfg.agg) out = aggregate(bars, cfg.agg, meta.gmtoffset || 0);
     if (cfg.daily) out = normalizeDaily(out, iv, meta.gmtoffset || 0);
+    else if (!cfg.agg) out = foldOffGrid(out, cfg.aggMs || cfg.ms);
     return {
       symbol, interval: iv, bars: out,
       meta: {
