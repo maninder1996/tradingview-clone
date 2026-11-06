@@ -987,3 +987,8 @@ kbd {
 
 /* Bottom bar is hidden; its items (ranges, panels, log/auto, clock) live in the top-bar Menu */
 .bottom-bar { display: none !important; }
+
+/* Refresh button stays pinned at the right edge of the (horizontally scrollable) mobile top bar */
+@media (max-width: 768px) {
+  .topbar .tb-refresh { position: sticky; right: 0; margin-left: auto; flex-shrink: 0; background: var(--panel); z-index: 2; }
+}
