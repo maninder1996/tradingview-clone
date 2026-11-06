@@ -1028,3 +1028,8 @@ kbd {
   .ms-tab.active { background: rgba(127,127,127,.18); color: var(--text); }
   .ms-empty { grid-column: 1 / -1; text-align: center; color: var(--text-dim); padding: 20px; }
 }
+
+/* Phone: top bar shows only the timeframe the user selected (others live in the dropdown arrow) */
+@media (max-width: 768px) {
+  .topbar .tb-iv:not(.active) { display: none; }
+}

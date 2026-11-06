@@ -560,7 +560,7 @@ export class App {
       h('span', {}, 'Markets'), h('span', { class: 'chev', html: ICON.chevDown }));
 
     // Intervals
-    const ivBtns = INTERVALS.filter((x) => this.state.favIntervals.includes(x.id)).map((x) =>
+    const ivBtns = INTERVALS.filter((x) => this.state.favIntervals.includes(x.id) || x.id === iv).map((x) =>
       h('button', {
         class: 'tb-btn tb-iv' + (x.id === iv ? ' active' : ''),
         title: x.label,
