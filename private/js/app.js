@@ -724,8 +724,7 @@ export class App {
       row(ICON.fullscreen, 'Fullscreen', () => { this.closePop(); this.toggleFullscreen(); }),
       row(ICON.logout, 'Log out', async () => { try { await fetch('/api/logout'); } catch (e) { /* */ } location.href = '/login.html'; }),
     );
-    this.closePop();
-    this.popRoot.append(menu);
+    this.showPop(menu);
   }
 
   // ================================================================ Left Drawing Toolbar
