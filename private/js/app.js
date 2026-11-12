@@ -2045,7 +2045,18 @@ export class App {
     const catsEl = h('div', { class: 'cat-pills' });
     const listEl = h('div', { class: 'sym-results' });
 
+    const USAGE_KEY = 'tv.symbolUsage';
+    const getUsage = () => { try { return JSON.parse(localStorage.getItem(USAGE_KEY)) || {}; } catch { return {}; } };
+    const bumpUsage = (id) => {
+      try {
+        const u = getUsage();
+        u[id] = { n: (u[id]?.n || 0) + 1, t: Date.now() };
+        localStorage.setItem(USAGE_KEY, JSON.stringify(u));
+      } catch { /* storage unavailable */ }
+    };
+
     const pick = (id) => {
+      bumpUsage(id);
       this.closeModal();
       if (onPick) onPick(id);
       else if (targetChart) { targetChart.setSymbol(id); this.updateQuoteSubscriptions(); }
@@ -2060,6 +2071,16 @@ export class App {
         const s = fromYahoo(r);
         if (!seen.has(s.id) && !all.some((x) => x.id === s.id)) all.push(s);
       }
+      // Most-used symbols first (count desc, then most recent); unused keep original order
+      const usage = getUsage();
+      if (!q.trim() && cat === 'all') {
+        for (const id of Object.keys(usage)) {
+          if (!all.some((x) => x.id === id)) { const s = getSymbol(id); if (s) all.push(s); }
+        }
+      }
+      const rank = (x) => usage[x.id] || { n: 0, t: 0 };
+      const order = new Map(all.map((x, i) => [x.id, i]));
+      all.sort((a, b) => (rank(b).n - rank(a).n) || (rank(b).t - rank(a).t) || (order.get(a.id) - order.get(b.id)));
       if (!all.length) { listEl.append(h('div', { class: 'empty-hint' }, 'No matching symbols found.')); return; }
       for (const s of all.slice(0, 60)) {
         seen.add(s.id);
