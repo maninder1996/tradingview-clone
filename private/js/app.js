@@ -1939,7 +1939,7 @@ export class App {
     const r = btn.getBoundingClientRect();
     const item = (icon, text, fn, cls = '') => h('div', { class: 'pop-item ' + cls, style: { display: 'flex', alignItems: 'center', gap: '8px' }, onclick: () => { this.closePop(); fn(); } },
       h('span', { html: icon, style: { display: 'inline-flex', width: '16px', height: '16px' } }), h('span', {}, text));
-    const menu = h('div', { class: 'pop-menu' + (this.mq && this.mq.matches ? ' mobile-menu' : ''), style: { left: r.left + 'px', top: r.bottom + 4 + 'px', minWidth: '220px' } },
+    const menu = h('div', { class: 'pop-menu' + (this.mq && this.mq.matches ? ' mobile-menu' : ''), style: { left: Math.max(8, Math.min(r.left, window.innerWidth - 240 - 8)) + 'px', top: r.bottom + 4 + 'px', minWidth: '220px', maxWidth: 'calc(100vw - 16px)' } },
       h('div', { class: 'pop-sec' }, 'Layouts'),
       ...this.workspaces.map((w) => h('div', {
         class: 'pop-item' + (w.id === this.activeWorkspaceId ? ' active' : ''),
