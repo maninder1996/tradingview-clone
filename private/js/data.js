@@ -79,7 +79,14 @@ export async function loadMore(symId, iv, beforeT) {
   if (sym.src !== 'binance' || binanceDown) return [];
   try {
     const arr = await getJSON(`${binanceRest(sym)}/klines?symbol=${sym.ticker}&interval=${BIV[iv]}&limit=1000&endTime=${beforeT - 1}`);
-    return parseKlines(arr);
+    const bars = parseKlines(arr);
+    if (bars.length) return bars;
+  } catch (e) { /* fall through to Yahoo */ }
+  // Binance has no older data (e.g. XAUUSDT futures only started Dec 2025) -> backfill from Yahoo proxy (GC=F)
+  if (!sym.fb) return [];
+  try {
+    const d = await getJSON(`/api/history?symbol=${encodeURIComponent(sym.fb)}&interval=${iv}`);
+    return (d.bars || []).filter((b) => b.t < beforeT);
   } catch (e) { return []; }
 }
 
