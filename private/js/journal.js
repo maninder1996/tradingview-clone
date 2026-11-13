@@ -103,6 +103,24 @@ export function computeFeatures(bars, i, s) {
     f.withTrend = long ? c > e : c < e;
   } else f.withTrend = null;
   if (j >= 6) f.approach = (long ? bars[j - 5].c - bars[j].c : bars[j].c - bars[j - 5].c) / a;
+  // bigger picture: every 16th close (~16x larger candles), EMA20 and its slope
+  if (j >= 16 * 24) {
+    const cl = []; for (let k = j; k >= 0 && cl.length < 40; k -= 16) cl.push(bars[k].c); cl.reverse();
+    const kk = 2 / 21; let e = cl[0]; const es = cl.map((c) => (e = c * kk + e * (1 - kk)));
+    const now = es[es.length - 1], prev = es[es.length - 6], last = cl[cl.length - 1];
+    f.htf = last > now && now > prev ? 'up' : last < now && now < prev ? 'down' : 'flat';
+  }
+  // your other (still active, not huge) boxes: one just beyond the stop, one in the path to the target
+  const act = (s.others || []).filter((b) => b.t0 <= s.t && b.t1 >= s.t && b.top - b.bot <= 6 * a);
+  if (s.sl != null) {
+    const bs = act.map((b) => ({ ...b, gap: (long ? s.sl - b.top : b.bot - s.sl) / a })).filter((b) => b.gap >= -0.5 && b.gap <= 3).sort((x, y) => x.gap - y.gap)[0];
+    if (bs) f.boxBeyondStop = { top: bs.top, bot: bs.bot, gap: Math.max(0, bs.gap) };
+  }
+  if (s.tp != null) {
+    const bp = act.filter((b) => (long ? b.bot > s.entry && b.top < s.tp : b.top < s.entry && b.bot > s.tp))
+      .sort((x, y) => Math.abs((x.top + x.bot) / 2 - s.entry) - Math.abs((y.top + y.bot) / 2 - s.entry))[0];
+    if (bp) f.boxInPath = { top: bp.top, bot: bp.bot };
+  }
   f.hour = new Date(s.t).getUTCHours();
   return f;
 }
@@ -154,10 +172,21 @@ export function evaluate(setup, trades) {
   }
   const range = setup.style !== 'base'; // 'range' = wide box showing earlier market behaviour; 'base' = tight base-candle zone
   const outside = setup.side === 'long' ? setup.entry - setup.zone.top : setup.zone.bot - setup.entry; // > 0 = entry is outside the box, before price reached it
-  if (range && outside > 0) add(null, `Entry is ${fmtPrice(outside)} (${(outside / f.atr).toFixed(1)} ATR) outside the box, ${setup.side === 'long' ? 'above' : 'below'} it — price had not reached the zone yet.`);
-  else if (range) add(null, `Entry is ${(f.depth * 100).toFixed(0)}% of the way across the box from its near edge (learned from your results).`);
+  const long = setup.side === 'long';
+  if (outside > 0.25 * f.atr) {
+    score -= 10;
+    add(false, `Entry is ${fmtPrice(outside)} (${(outside / f.atr).toFixed(1)} ATR) outside the box, ${long ? 'above' : 'below'} it — price had not reached the zone yet. Wait for it to touch the zone (or enter inside); entering early lets price keep running through.`);
+  } else if (range) add(null, `Entry is ${(f.depth * 100).toFixed(0)}% of the way across the box from its near edge (learned from your results).`);
   else if (f.depth <= 0.35) { score += 10; add(true, 'Entry near the proximal edge of the zone — tight risk.'); }
   else if (f.depth > 0.7) { score -= 10; add(false, 'Entry deep inside / far edge of the zone — poor location.'); }
+  // ---- context from the previous candles (why a stop gets hit even when the idea is right)
+  if (f.htf === 'up' || f.htf === 'down') {
+    if ((f.htf === 'up') === long) { score += 5; add(true, `Bigger picture (~16× larger candles) is ${f.htf.toUpperCase()} — with your trade.`); }
+    else { score -= 10; add(false, `Bigger picture (~16× larger candles) is ${f.htf.toUpperCase()} — against your ${long ? 'long' : 'short'}. Price can keep pushing through your stop.`); }
+  } else if (f.htf === 'flat') add(null, 'Bigger picture (~16× larger candles) is sideways.');
+  if (f.approach != null && f.approach > 3) { score -= 8; add(false, `Price is rushing into the zone (${f.approach.toFixed(1)} ATR in 5 candles) — wait for a rejection candle before entering.`); }
+  if (f.boxBeyondStop) { score -= 5; add(false, `Another box of yours sits just beyond your stop (${fmtPrice(f.boxBeyondStop.bot)} – ${fmtPrice(f.boxBeyondStop.top)}, ${f.boxBeyondStop.gap.toFixed(1)} ATR past it) — price may be drawn to it first; consider a stop beyond that box.`); }
+  if (f.boxInPath) add(null, `Another box of yours lies between entry and target (${fmtPrice(f.boxInPath.bot)} – ${fmtPrice(f.boxInPath.top)}) — price may react there first.`);
   if (f.slBeyond === true) { score += 5; add(true, 'Stop loss sits beyond the far edge of the zone.'); }
   else if (f.slBeyond === false) { score -= 10; add(false, 'Stop loss is inside the zone — zone can be tagged and still hold, you get stopped early.'); }
   if (range) { /* box already contains earlier candles by design: no freshness / leg-out / width rules */ }
@@ -276,8 +305,12 @@ export class Journal extends Emitter {
     if (!bars) return { ...setup, zone: null, f: {}, bars: null, i: -1 };
     const i = Math.max(1, idxAt(bars, setup.t));
     const a = atrAt(bars, Math.max(1, i - 1));
-    const zone = findZone(this.rects(setup.symbol), setup.side, setup.entry, setup.t, a);
-    const full = { ...setup, zone, style: this.cfg.zoneStyle || 'range' };
+    const rects = this.rects(setup.symbol);
+    const zone = findZone(rects, setup.side, setup.entry, setup.t, a);
+    const boxes = rects.filter((d) => d.pts && d.pts.length >= 2).map((d) => ({
+      top: Math.max(d.pts[0].p, d.pts[1].p), bot: Math.min(d.pts[0].p, d.pts[1].p), t0: Math.min(d.pts[0].t, d.pts[1].t), t1: Math.max(d.pts[0].t, d.pts[1].t) }));
+    const others = zone ? boxes.filter((b) => !(b.top === zone.top && b.bot === zone.bot && b.t0 === zone.t0)) : boxes;
+    const full = { ...setup, zone, others, style: this.cfg.zoneStyle || 'range' };
     return { ...full, f: computeFeatures(bars, i, full), bars, i };
   }
   check(chart, setup) { const a = this.analyse(chart, setup); return { setup: a, ev: evaluate(a, this.trades) }; }
