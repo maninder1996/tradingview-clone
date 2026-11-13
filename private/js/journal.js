@@ -54,7 +54,8 @@ export function findZone(rects, side, entry, t, a) {
     if (t0 > t) continue; // zone must exist before entry
     const dist = entry > top ? entry - top : entry < bot ? bot - entry : 0;
     if (dist > 0.5 * a) continue;
-    const score = dist + (top - bot) * 1e-6;
+    // boxes that still span the entry's time beat older boxes that merely share the price; then nearest in price; then smallest
+    const score = (t <= t1 ? 0 : 1e9) + dist + (top - bot) * 1e-6;
     if (!best || score < best.score) best = { score, top, bot, t0, t1, kind: side === 'long' ? 'demand' : 'supply' };
   }
   if (best) delete best.score;
@@ -133,7 +134,7 @@ export function evaluate(setup, trades) {
     add(false, `No ${setup.side === 'long' ? 'demand' : 'supply'} zone (rectangle) found near this entry — draw your zone first.`);
     return { verdict: 'SKIP', score: 15, reasons, stage: 'rules', n: 0, neighbors: [] };
   }
-  add(true, `${setup.zone.kind === 'demand' ? 'Demand' : 'Supply'} zone found (${fmtPrice(setup.zone.bot)} – ${fmtPrice(setup.zone.top)}).`);
+  add(true, `${setup.zone.kind === 'demand' ? 'Demand' : 'Supply'} zone found (${fmtPrice(setup.zone.bot)} – ${fmtPrice(setup.zone.top)}), box starts ${fmtDateShort(setup.zone.t0)}.`);
   if (setup.sl == null || setup.tp == null) { score -= 15; add(false, 'Set both Stop Loss and Take Profit so risk:reward can be judged.'); }
   if (f.rr != null) {
     if (f.rr >= 3) { score += 15; add(true, `R:R ${f.rr.toFixed(1)} — excellent.`); }
