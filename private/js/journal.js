@@ -393,16 +393,18 @@ export function renderJournalDock(app) {
 
   const out = h('div', { class: 'jr-out' });
   const pos = c ? J.positionDrawings(c) : [];
+  app._jrN = pos.length; // lets the app refresh this panel when drawings/chart change
   left.append(
     h('button', { class: 'btn-buy jr-btn', onclick: () => {
-      if (!c) return; const r = J.importFromChart(c);
+      const ch = app.active; if (!ch) return; const r = J.importFromChart(ch);
       app.toast(r.added ? `Imported ${r.added} trade(s) from chart drawings (${r.open} still open)` : 'No new Long/Short position drawings on this chart', r.added ? 'success' : 'warn'); rerender();
     } }, `Import ${pos.length} Long/Short drawing(s) on this chart`),
     h('button', { class: 'bb-btn jr-btn', onclick: () => {
       out.innerHTML = '';
-      if (!c || !pos.length) { out.append(h('div', { class: 'empty-hint' }, 'Draw a Long/Short position tool (entry, TP, SL) plus your zone rectangle, then press this.')); return; }
-      const d = (c.selected && pos.includes(c.selected)) ? c.selected : pos[pos.length - 1];
-      const s = J.setupFromDrawing(c, d); const { setup: a, ev } = J.check(c, s);
+      const ch = app.active, ps = ch ? J.positionDrawings(ch) : []; // read fresh: the panel may have been drawn before the chart/drawing existed
+      if (!ch || !ps.length) { out.append(h('div', { class: 'empty-hint' }, 'Draw a Long/Short position tool (entry, TP, SL) plus your zone rectangle, then press this.')); return; }
+      const d = (ch.selected && ps.includes(ch.selected)) ? ch.selected : ps[ps.length - 1];
+      const s = J.setupFromDrawing(ch, d); const { setup: a, ev } = J.check(ch, s);
       out.append(verdictCard(ev, a));
     } }, 'Evaluate selected / latest Long-Short drawing'),
     out,

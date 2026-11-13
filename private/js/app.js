@@ -937,8 +937,15 @@ export class App {
     }
   }
 
+  // keep the Journal tab's Import count / Evaluate in step with the chart (only redraws when the count changes)
+  refreshJournal() {
+    if (this.state.bottomTab !== 'journal' || !this.active) return;
+    if (this.journal.positionDrawings(this.active).length !== this._jrN) this.renderBottomPanel();
+  }
+
   onChartLoaded(chart) {
     if (chart === this.active) {
+      this.refreshJournal();
       this.renderTopbar();
       if (this.state.rightTab === 'watchlist') this.updateDetailsPane();
     }
@@ -997,6 +1004,7 @@ export class App {
     }
     this.saveSoon();
     this.charts.forEach((c) => { if (c.state.symbol === sym) c.requestRender(); });
+    this.refreshJournal();
     if (this.state.rightTab === 'tree') this.renderRightPanel();
   }
   undoDrawing() {
