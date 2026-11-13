@@ -163,7 +163,7 @@ export function evaluate(setup, trades) {
   // ---- your own history
   const closed = trades.filter((t) => t.exit && (t.exit.result === 'win' || t.exit.result === 'loss') && t.f && t.f.zoneAtr != null);
   const n = closed.length;
-  let stage = 'rules', data = null, neighbors = [];
+  let stage = 'rules', data = null, neighbors = [], suggest = null;
   if (n >= MIN_DATA) {
     const v = vec(f), cls = marketClass(setup.symbol);
     const ranked = closed.map((t) => {
@@ -182,12 +182,32 @@ export function evaluate(setup, trades) {
     score = Math.round(score * (1 - wd) + dataScore * wd);
     stage = n >= 50 ? 'data-led' : 'blended';
     neighbors = near.slice(0, 3).map((x) => x.t);
+    // ---- path check: how far did similar trades run in your favour before turning, and how far against you first?
+    const ex = near.map((x) => x.t).filter((t) => t.exit.mfe != null && t.f.slAtr != null);
+    if (ex.length >= 5 && f.slAtr != null && f.atr) {
+      const q = (arr, p) => { const a = [...arr].sort((x, y) => x - y); return a[Math.min(a.length - 1, Math.floor(p * (a.length - 1) + 0.5))]; };
+      const sign = setup.side === 'long' ? 1 : -1;
+      const mfe = ex.map((t) => t.exit.mfe * t.f.slAtr), med = q(mfe, 0.5), p75 = q(mfe, 0.75);
+      const tpAtr = f.rr != null ? f.rr * f.slAtr : null;
+      suggest = { tp: setup.entry + sign * q(mfe, 0.6) * f.atr };
+      if (tpAtr != null && tpAtr > 2 && tpAtr > p75 * 1.5) {
+        score -= 10;
+        add(false, `Target is ${tpAtr.toFixed(1)} ATR away, but similar past trades usually turned after ~${med.toFixed(1)} ATR (75% turned before ${p75.toFixed(1)}). This trade will likely NOT complete — consider a nearer target (~${fmtPrice(suggest.tp)}).`);
+      }
+      const win = ex.filter((t) => t.exit.result === 'win');
+      if (win.length >= 3) {
+        const w75 = q(win.map((t) => t.exit.mae * t.f.slAtr), 0.75);
+        suggest.sl = setup.entry - sign * w75 * f.atr;
+        if (f.slAtr < w75) { score -= 8; add(false, `Your winning similar trades pulled back up to ${w75.toFixed(1)} ATR against you first; this stop is only ${f.slAtr.toFixed(1)} ATR — likely stopped out before the move (stop ≈ ${fmtPrice(suggest.sl)} would have survived).`); }
+      }
+    }
     add(data.expR > 0 ? true : false, `Your ${k} most similar past trades: ${(data.winRate * 100).toFixed(0)}% wins, avg ${data.expR >= 0 ? '+' : ''}${data.expR.toFixed(2)}R (worst-case win rate ≈ ${(data.low * 100).toFixed(0)}%).`);
   } else {
     add(null, `Only ${n} closed trades stored — advisor is rules-only until ${MIN_DATA}.`);
   }
+  score = clamp(Math.round(score), 0, 100);
   const verdict = score >= 65 ? 'TAKE' : score >= 45 ? 'CAUTION' : 'SKIP';
-  return { verdict, score, reasons, stage, n, data, neighbors };
+  return { verdict, score, reasons, stage, n, data, neighbors, suggest };
 }
 
 // which of your habits actually win (needs enough trades)
@@ -331,6 +351,7 @@ export function verdictCard(ev, setup) {
       h('span', { class: 'jr-score' }, `${ev.score}/100 · ${ev.stage}`)),
     h('div', { class: 'jr-sub' }, `${shortName(setup.symbol)} ${setup.tf || ''} · ${setup.side.toUpperCase()} @ ${fmtPrice(setup.entry)}`),
     h('ul', { class: 'jr-list' }, ...ev.reasons.map((r) => h('li', { class: r.ok === true ? 'ok' : r.ok === false ? 'bad' : '' }, (r.ok === true ? '✔ ' : r.ok === false ? '✖ ' : '• ') + r.text))),
+    ev.suggest ? h('div', { class: 'jr-sub' }, 'From similar trades — ' + [ev.suggest.tp != null ? `TP ≈ ${fmtPrice(ev.suggest.tp)}` : '', ev.suggest.sl != null ? `SL ≈ ${fmtPrice(ev.suggest.sl)}` : ''].filter(Boolean).join(' · ')) : null,
     ev.neighbors.length ? h('div', { class: 'jr-sub' }, 'Closest past trades: ' + ev.neighbors.map((t) => `${shortName(t.symbol)} ${t.side} ${t.exit.result === 'win' ? '✔' : '✖'} ${t.exit.r != null ? t.exit.r.toFixed(1) + 'R' : ''}`).join(' · ')) : null);
 }
 
