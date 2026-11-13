@@ -46,6 +46,11 @@ function emaAt(bars, i, n) {
 // ---------------------------------------------------------------- zone + features
 // Your manually measured zone = a rectangle drawing. Long ⇒ demand zone, Short ⇒ supply zone.
 export function findZone(rects, side, entry, t, a) {
+  // Zones you draw are often extended to the right, so several boxes can "cover" an entry.
+  // Rule: among boxes that still span the entry time and sit within ~1 ATR (or 0.2%) of the entry price,
+  // take the MOST RECENTLY STARTED one (the box drawn for this trade); tie -> nearest in price.
+  // Boxes that ended before the entry are only a fallback and must be tight (0.5 ATR).
+  const tolIn = Math.max(a, entry * 0.002), tolOut = 0.5 * a;
   let best = null;
   for (const d of rects) {
     if (!d.pts || d.pts.length < 2) continue;
@@ -53,13 +58,18 @@ export function findZone(rects, side, entry, t, a) {
     const t0 = Math.min(d.pts[0].t, d.pts[1].t), t1 = Math.max(d.pts[0].t, d.pts[1].t);
     if (t0 > t) continue; // zone must exist before entry
     const dist = entry > top ? entry - top : entry < bot ? bot - entry : 0;
-    if (dist > 0.5 * a) continue;
-    // boxes that still span the entry's time beat older boxes that merely share the price; then nearest in price; then smallest
-    const score = (t <= t1 ? 0 : 1e9) + dist + (top - bot) * 1e-6;
-    if (!best || score < best.score) best = { score, top, bot, t0, t1, kind: side === 'long' ? 'demand' : 'supply' };
+    const inTime = t <= t1;
+    if (dist > (inTime ? tolIn : tolOut)) continue;
+    const c = { top, bot, t0, t1, dist, inTime };
+    let better;
+    if (!best) better = true;
+    else if (c.inTime !== best.inTime) better = c.inTime;
+    else if (c.inTime) better = c.t0 !== best.t0 ? c.t0 > best.t0 : c.dist < best.dist;
+    else better = c.dist !== best.dist ? c.dist < best.dist : c.top - c.bot < best.top - best.bot;
+    if (better) best = c;
   }
-  if (best) delete best.score;
-  return best;
+  if (!best) return null;
+  return { top: best.top, bot: best.bot, t0: best.t0, t1: best.t1, kind: side === 'long' ? 'demand' : 'supply' };
 }
 
 export function computeFeatures(bars, i, s) {
