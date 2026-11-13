@@ -259,6 +259,12 @@ export const TOOLS = {
       ctx.fillStyle = d.style.fill || alpha(d.style.color, 0.15); ctx.fillRect(r.x, r.y, r.w, r.h);
       stroke(ctx, d); ctx.strokeRect(r.x, r.y, r.w, r.h);
       if (d.style.text) label(ctx, d.style.text, r.x + r.w / 2, r.y + r.h / 2, { color: d.style.color });
+      else if (X.lastPrice != null && d.pts.length >= 2) {
+        // auto zone label by position vs current price: box below price = DEMAND (buy area), above = SUPPLY (sell area)
+        const top = Math.max(d.pts[0].p, d.pts[1].p), bot = Math.min(d.pts[0].p, d.pts[1].p);
+        const [txt, col] = X.lastPrice > top ? ['DEMAND', '#00f5a0'] : X.lastPrice < bot ? ['SUPPLY', '#ff4d8d'] : ['ZONE · price inside', '#ffc400'];
+        label(ctx, txt, r.x + 2, r.y - 2, { color: col, bg: 'rgba(9, 12, 26, 0.78)', align: 'left', base: 'bottom', font: '700 10px Inter, system-ui, sans-serif' });
+      }
     },
     hit(X, d, x, y) { const r = rectOf(...d.pts.map(X.px)); return inRect(x, y, { x: r.x - TOL, y: r.y - TOL, w: r.w + 2 * TOL, h: r.h + 2 * TOL }); },
   },

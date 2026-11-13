@@ -1261,6 +1261,18 @@ export class Chart extends Emitter {
     return false;
   }
   zoom(k) { const ri = this.view.right; this.view.spacing = clamp(this.view.spacing * k, MIN_SPACING, MAX_SPACING); this.view.right = ri; this.requestRender(); }
+  // Zoom out so every rectangle zone drawn on this symbol is visible (loads older candles first if needed)
+  async fitZones() {
+    const rs = this.drawings.filter((d) => d.type === 'rect' && !d.hidden && d.pts && d.pts.length >= 2);
+    if (!rs.length || !this.bars.length) return 0;
+    const ts = rs.flatMap((d) => d.pts.map((p) => p.t)), t0 = Math.min(...ts);
+    for (let k = 0; k < 25 && this.bars[0].t > t0 && !this.noMore && !this.loadingMore && this.sym.src === 'binance'; k++) await this.fetchOlder();
+    const i0 = Math.max(0, this.timeToIdx(t0) - 3), n = this.bars.length;
+    this.view.right = n - 1 + this.app.settings.rightMargin;
+    this.view.spacing = clamp(this.plotW / (this.view.right - i0 + 4), MIN_SPACING, MAX_SPACING);
+    this.scales = {}; this.requestRender();
+    return rs.length;
+  }
   goToTime(t) { const i = this.timeToIdx(t); const vis = this.plotW / this.view.spacing; this.view.right = i + vis / 2; this.requestRender(); }
 
   async fetchOlder() {

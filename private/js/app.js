@@ -720,6 +720,7 @@ export class App {
       row(ICON.indicator, 'Pine Script Editor', () => { this.closePop(); toggleTab('pine'); }, this.state.bottomTab === 'pine'),
       row(ICON.indicator, 'Log scale', () => { this.closePop(); if (c) c.toggleLog(); }, !!(c && c.state.logScale)),
       row(ICON.fullscreen, 'Auto-fit scale', () => { this.closePop(); if (c) c.resetView(); }),
+      row(ICON.fullscreen, 'Show all zones (boxes) on this chart', () => { this.closePop(); this.showAllZones(); }),
       row(ICON.alert, `NSE ${nseStatus(Date.now()).label} · ${fmtClock(Date.now())} — time zone…`, () => { this.closePop(); this.openTimezoneMenu({ getBoundingClientRect: () => ({ right: window.innerWidth - 12, top: window.innerHeight - 40 }) }); }),
       h('div', { class: 'pop-sec' }, 'Workspace'),
       row(ICON.template, 'Layout: ' + ws.name, sub((b) => this.openWorkspaceDropdown(b))),
@@ -1494,6 +1495,13 @@ export class App {
     this.updateClock();
   }
 
+  async showAllZones(chart = this.active) {
+    if (!chart) return;
+    this.toast('Loading history to show all zones…');
+    const n = await chart.fitZones();
+    this.toast(n ? `Showing all ${n} zone box(es) on ${shortName(chart.state.symbol)}` : 'No rectangle zones drawn on this symbol yet', n ? 'success' : 'warn');
+  }
+
   async applyQuickRange(r) {
     const c = this.active;
     if (!c) return;
@@ -2025,6 +2033,7 @@ export class App {
     }
     items.push(
       h('div', { class: 'pop-item', onclick: () => { this.closePop(); chart.resetView(); } }, 'Reset Chart View (Alt+R)'),
+      h('div', { class: 'pop-item', onclick: () => { this.closePop(); this.showAllZones(chart); } }, 'Show all zones (boxes)'),
       h('div', { class: 'pop-sep' }),
       h('div', { class: 'pop-item', onclick: () => { this.closePop(); this.openAlertModal(sym, price); } }, `🔔 Add Alert on ${shortName(sym)} at ${fpx}…`),
       h('div', { class: 'pop-item', onclick: () => { this.closePop(); this.trading.placeOrder({ symbol: sym, side: 'buy', type: 'limit', qty: 1, price, currentPrice: chart.bars[chart.bars.length - 1]?.c }); this.toast(`Buy Limit placed @ ${fpx}`); } }, `Buy 1 ${shortName(sym)} @ ${fpx} Limit`),
