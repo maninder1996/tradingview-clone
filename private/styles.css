@@ -1052,3 +1052,6 @@ kbd {
 .jr-modal { width: min(440px, 100%); max-height: 90vh; overflow: auto; background: var(--bg); border: 1px solid var(--border); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
 .jr-title { font-weight: 800; font-size: 14px; }
 .jr-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+/* hide symbol title + OHLC box on the chart (Settings → Show Symbol & OHLC Info); indicator rows stay */
+.no-info .lg-main, .no-info .lg-ohlc { display: none; }

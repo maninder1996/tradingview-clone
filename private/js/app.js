@@ -116,7 +116,7 @@ export class App {
     this.settings = {
       theme: 'aurora', upColor: '#00f5a0', downColor: '#ff2a85', wickUp: '#00f5a0', wickDown: '#ff2a85',
       lineColor: '#00e5ff', glowEffects: true, gridV: true, gridH: true, watermark: true, lastPriceLine: true,
-      countdown: true, indicatorLabels: true, showVolLegend: true, crossStyle: 'dashed',
+      countdown: true, indicatorLabels: true, showVolLegend: true, chartInfo: false, crossStyle: 'dashed',
       rightMargin: 10, barSpacing: 8, timezone: 'Asia/Kolkata', neonUpgraded: true,
       ...savedSettings,
     };
@@ -2323,6 +2323,7 @@ export class App {
         ['lastPriceLine', 'Last Price Line & Axis Label'],
         ['countdown', 'Countdown to Bar Close'],
         ['indicatorLabels', 'Indicator Last-Value Labels on Scale'],
+        ['chartInfo', 'Show Symbol & OHLC Info on Chart (top-left)'],
         ['showVolLegend', 'Show Volume in OHLC Legend'],
       ].map(([k, lbl]) => h('label', { class: 'form-row' },
         h('span', {}, lbl),

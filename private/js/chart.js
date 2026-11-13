@@ -906,6 +906,7 @@ export class Chart extends Emitter {
   buildLegend() {
     const s = this.sym; const iv = ivInfo(this.state.interval);
     this.legend.innerHTML = '';
+    this.root.classList.toggle('no-info', !this.app.settings.chartInfo);
     const head = h('div', { class: 'lg-main' },
       h('span', { class: 'lg-sym', title: 'Change symbol', onclick: () => this.app.openSymbolSearch(this) }, `${s.name}`),
       h('span', { class: 'lg-dot' }, '·'), h('span', { class: 'lg-iv', onclick: () => this.app.openIntervalMenu(this) }, iv.short),
