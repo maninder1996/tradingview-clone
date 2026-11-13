@@ -1033,3 +1033,22 @@ kbd {
 @media (max-width: 768px) {
   .topbar .tb-iv:not(.active) { display: none; }
 }
+
+/* ---- Journal & Advisor ---- */
+.jr-left { overflow: auto; }
+.jr-btn { width: 100%; justify-content: center; height: 30px; font-size: 11px; font-weight: 700; }
+.jr-sub { font-size: 11px; color: var(--text-dim); line-height: 1.45; }
+.jr-bar { height: 6px; border-radius: 4px; background: var(--border); overflow: hidden; }
+.jr-bar i { display: block; height: 100%; background: linear-gradient(90deg, #00f5a0, #00d9f5); }
+.jr-gate { font-size: 11px; display: flex; align-items: center; gap: 5px; color: var(--text-dim); }
+.jr-card { border: 1px solid var(--border); border-radius: 10px; padding: 10px; background: rgba(8, 11, 24, 0.6); display: flex; flex-direction: column; gap: 6px; }
+.jr-head { display: flex; justify-content: space-between; align-items: center; }
+.jr-verdict { font-weight: 800; font-size: 14px; letter-spacing: 0.03em; }
+.jr-verdict.up { color: #00f5a0; } .jr-verdict.down { color: #ff2a85; } .jr-verdict.mid { color: #ffc400; }
+.jr-score { font-size: 11px; color: var(--text-dim); font-family: "JetBrains Mono", monospace; }
+.jr-list { margin: 0; padding: 0; list-style: none; font-size: 11.5px; display: flex; flex-direction: column; gap: 3px; }
+.jr-list .ok { color: #00f5a0; } .jr-list .bad { color: #ff6a9b; }
+.jr-overlay { position: fixed; inset: 0; z-index: 9999; background: rgba(0, 0, 0, 0.6); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.jr-modal { width: min(440px, 100%); max-height: 90vh; overflow: auto; background: var(--bg); border: 1px solid var(--border); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.jr-title { font-weight: 800; font-size: 14px; }
+.jr-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }

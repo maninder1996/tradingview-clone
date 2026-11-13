@@ -6,6 +6,7 @@ import { INDICATORS, CATEGORY_ORDER, createIndicator, indicatorLabel } from './i
 import { TOOLS, TOOL_GROUPS, toolName } from './drawings.js';
 import { Chart, CHART_TYPES } from './chart.js';
 import { ICON } from './icons.js';
+import { Journal, renderJournalDock, askBeforeTrade } from './journal.js';
 import { TradingEngine, AlertsManager, DEFAULT_SCRIPT, runCustomScript, getScreenerRows, getIndiaConversionRates } from './features.js';
 
 const THEMES = {
@@ -309,6 +310,7 @@ export class App {
     const setVh = () => document.documentElement.style.setProperty('--vh', window.innerHeight * 0.01 + 'px');
     setVh(); window.addEventListener('resize', setVh);
 
+    this.journal = new Journal(this); // must exist before the first renderBottomPanel() (saved layout may reopen the Journal tab)
     this.renderTopbar();
     this.renderLeftbar();
     this.renderRightRail();
@@ -319,6 +321,8 @@ export class App {
     quotes.on('quote', (id, q, prev) => this.onQuoteUpdate(id, q, prev));
     this.trading.on('change', () => { this.renderBottomPanel(); this.charts.forEach((c) => c.requestRender()); });
     this.trading.on('tick', () => this.updateTradingLive());
+    this.trading.on('opened', (pos) => this.journal.paperOpen(pos));
+    this.trading.on('closed', (pos, px) => this.journal.paperClose(pos, px));
     this.trading.on('fill', (ord, px) => this.toast(`${ord.side.toUpperCase()} ${ord.qty} ${shortName(ord.symbol)} @ ${fmtPrice(px)}`, 'success'));
     this.alertsMgr.on('change', () => { if (this.state.rightTab === 'alerts') this.renderRightPanel(); this.charts.forEach((c) => c.requestRender()); });
     this.alertsMgr.on('trigger', (a, log) => {
@@ -711,6 +715,7 @@ export class App {
         ...QUICK_RANGES.map((r) => h('button', { class: 'tb-pill', title: `Switch to ${r.lbl} view`, onclick: () => { this.closePop(); this.applyQuickRange(r); } }, r.lbl))),
       h('div', { class: 'pop-sec' }, 'Panels & scale'),
       row(ICON.template, 'Paper Trading', () => { this.closePop(); toggleTab('trading'); }, this.state.bottomTab === 'trading'),
+      row(ICON.template, 'Journal & Advisor', () => { this.closePop(); toggleTab('journal'); }, this.state.bottomTab === 'journal'),
       row(ICON.template, 'Stock / Crypto Screener', () => { this.closePop(); toggleTab('screener'); }, this.state.bottomTab === 'screener'),
       row(ICON.indicator, 'Pine Script Editor', () => { this.closePop(); toggleTab('pine'); }, this.state.bottomTab === 'pine'),
       row(ICON.indicator, 'Log scale', () => { this.closePop(); if (c) c.toggleLog(); }, !!(c && c.state.logScale)),
@@ -1456,6 +1461,7 @@ export class App {
 
     const tabs = [
       { id: 'trading', label: 'Paper Trading' },
+      { id: 'journal', label: 'Journal & Advisor' },
       { id: 'screener', label: 'Stock / Crypto Screener' },
       { id: 'pine', label: 'Pine Script Editor' },
     ];
@@ -1542,6 +1548,7 @@ export class App {
     this.bottomPanel.innerHTML = '';
     if (!tab) return;
     if (tab === 'trading') this.renderTradingDock();
+    else if (tab === 'journal') { this.journal.reconcile(); if (this.active) this.journal.resolveOpen(this.active); renderJournalDock(this); }
     else if (tab === 'screener') this.renderScreenerDock();
     else if (tab === 'pine') this.renderPineDock();
   }
@@ -1600,13 +1607,14 @@ export class App {
     $('#tk-qty', ticket).oninput = (e) => { f.qty = +e.target.value || 1; };
     const submit = (side) => {
       const px = quotes.get(symId)?.price || c?.bars[c.bars.length - 1]?.c || curPrice;
-      this.trading.placeOrder({
+      const order = {
         symbol: symId, side, type: $('#tk-type', ticket).value,
         qty: +$('#tk-qty', ticket).value || 1,
         price: +$('#tk-price', ticket).value || px,
         tp: $('#tk-tp', ticket).value, sl: $('#tk-sl', ticket).value,
         currentPrice: px,
-      });
+      };
+      this.gateOrder(order);
     };
     $('#tk-buy', ticket).onclick = () => submit('buy');
     $('#tk-sell', ticket).onclick = () => submit('sell');
@@ -1705,7 +1713,19 @@ export class App {
     const symId = this.active.state.symbol;
     const last = this.active.bars[this.active.bars.length - 1];
     const px = quotes.get(symId)?.price || last?.c;
-    this.trading.placeOrder({ symbol: symId, side, type: 'market', qty: 1, currentPrice: px });
+    this.gateOrder({ symbol: symId, side, type: 'market', qty: 1, currentPrice: px });
+  }
+
+  // Ask the journal advisor (zone-based) before an order opens a NEW position; user can still override.
+  gateOrder(order) {
+    const opens = !this.trading.positionsFor(order.symbol).some((p) => p.side !== (order.side === 'buy' ? 'long' : 'short'));
+    if (!this.journal.cfg.gate || !opens) { this.trading.placeOrder(order); return; }
+    const c = this.journal.chartFor(order.symbol);
+    const entry = order.type === 'market' ? order.currentPrice : (+order.price || order.currentPrice);
+    askBeforeTrade(this, {
+      symbol: order.symbol, tf: c ? c.state.interval : '?', side: order.side === 'buy' ? 'long' : 'short',
+      t: Date.now(), entry, sl: +order.sl || null, tp: +order.tp || null,
+    }, () => this.trading.placeOrder(order));
   }
 
   // ---- Screener Dock

@@ -67,6 +67,7 @@ export class TradingEngine extends Emitter {
     if (!pos) {
       pos = { id: uid(), symbol, side: dir, qty, avg: execPrice, last: execPrice, pnl: 0, tp: tp || null, sl: sl || null, time: Date.now() };
       this.positions.push(pos);
+      this.emit('opened', pos);
     } else if (pos.side === dir) {
       const totalCost = pos.avg * pos.qty + execPrice * qty;
       pos.qty += qty;
@@ -82,8 +83,11 @@ export class TradingEngine extends Emitter {
       const rem = qty - closeQty;
       if (pos.qty <= 0) {
         this.positions = this.positions.filter((p) => p !== pos);
+        this.emit('closed', pos, execPrice, realizedPnl);
         if (rem > 0) {
-          this.positions.push({ id: uid(), symbol, side: dir, qty: rem, avg: execPrice, last: execPrice, pnl: 0, tp: tp || null, sl: sl || null, time: Date.now() });
+          const np = { id: uid(), symbol, side: dir, qty: rem, avg: execPrice, last: execPrice, pnl: 0, tp: tp || null, sl: sl || null, time: Date.now() };
+          this.positions.push(np);
+          this.emit('opened', np);
         }
       }
     }
