@@ -391,11 +391,12 @@ function positionTool(isLong) {
       ctx.fillStyle = 'rgba(242,54,69,0.2)'; ctx.fillRect(x0, Math.min(ye, ys), w, Math.abs(ys - ye));
       ctx.strokeStyle = '#787b86'; ctx.lineWidth = 1; ctx.setLineDash([]); line(ctx, { x: x0, y: ye }, { x: x1, y: ye });
       // live progress
-      const last = X.lastPrice;
-      if (last != null) {
+      // only while the latest candle is inside the tool's time window (an old drawing must not use today's price)
+      const last = X.lastPrice, live = last != null && X.lastX > x0 && X.lastX <= x1 + 1;
+      if (live) {
         const lx = Math.min(Math.max(X.lastX, x0), x1);
-        if (X.lastX > x0) {
-          const yl = X.p2y(last); ctx.fillStyle = (isLong ? last >= e : last <= e) ? 'rgba(8,153,129,0.25)' : 'rgba(242,54,69,0.25)';
+        {
+          const lo = Math.min(yt, ys), hi = Math.max(yt, ys), yl = Math.min(hi, Math.max(lo, X.p2y(last))); ctx.fillStyle = (isLong ? last >= e : last <= e) ? 'rgba(8,153,129,0.25)' : 'rgba(242,54,69,0.25)';
           ctx.fillRect(x0, Math.min(ye, yl), lx - x0, Math.abs(yl - ye));
         }
       }
@@ -403,8 +404,8 @@ function positionTool(isLong) {
       const qty = d.style.qty || 1; const cx = x0 + w / 2;
       label(ctx, `Target: ${X.fmt(t)} (${tp.toFixed(2)}%)  ${X.fmt(Math.abs(t - e) * qty)}`, cx, yt + (yt < ye ? -12 : 12), { bg: '#089981' });
       label(ctx, `Stop: ${X.fmt(s)} (${sp.toFixed(2)}%)  ${X.fmt(Math.abs(s - e) * qty)}`, cx, ys + (ys > ye ? 12 : -12), { bg: '#f23645' });
-      const pl = last != null ? (isLong ? last - e : e - last) * qty : null;
-      label(ctx, `${isLong ? 'Long' : 'Short'} · Qty ${qty} · R:R ${rr.toFixed(2)}${pl != null && X.lastX > x0 ? `\nOpen P&L: ${X.fmt(pl)}` : ''}`, cx, ye, { bg: (pl ?? 0) >= 0 ? 'rgba(8,153,129,0.95)' : 'rgba(242,54,69,0.95)' });
+      const pl = live ? (isLong ? last - e : e - last) * qty : null;
+      label(ctx, `${isLong ? 'Long' : 'Short'} · Qty ${qty} · R:R ${rr.toFixed(2)}${pl != null ? `\nOpen P&L: ${X.fmt(pl)}` : ''}`, cx, ye, { bg: (pl ?? 0) >= 0 ? 'rgba(8,153,129,0.95)' : 'rgba(242,54,69,0.95)' });
     },
     hit(X, d, x, y) {
       const x0 = X.px(d.pts[0]).x, x1 = X.px(d.pts[1]).x; const ys = [d.pts[0].p, d.pts[1].p, d.pts[2].p].map(X.p2y);
