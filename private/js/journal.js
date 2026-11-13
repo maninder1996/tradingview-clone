@@ -153,7 +153,9 @@ export function evaluate(setup, trades) {
     else { score -= 20; add(false, `R:R ${f.rr.toFixed(1)} — too low for a zone trade (aim ≥ 2).`); }
   }
   const range = setup.style !== 'base'; // 'range' = wide box showing earlier market behaviour; 'base' = tight base-candle zone
-  if (range) add(null, `Entry is ${(f.depth * 100).toFixed(0)}% of the way across the box from its near edge (learned from your results).`);
+  const outside = setup.side === 'long' ? setup.entry - setup.zone.top : setup.zone.bot - setup.entry; // > 0 = entry is outside the box, before price reached it
+  if (range && outside > 0) add(null, `Entry is ${fmtPrice(outside)} (${(outside / f.atr).toFixed(1)} ATR) outside the box, ${setup.side === 'long' ? 'above' : 'below'} it — price had not reached the zone yet.`);
+  else if (range) add(null, `Entry is ${(f.depth * 100).toFixed(0)}% of the way across the box from its near edge (learned from your results).`);
   else if (f.depth <= 0.35) { score += 10; add(true, 'Entry near the proximal edge of the zone — tight risk.'); }
   else if (f.depth > 0.7) { score -= 10; add(false, 'Entry deep inside / far edge of the zone — poor location.'); }
   if (f.slBeyond === true) { score += 5; add(true, 'Stop loss sits beyond the far edge of the zone.'); }
