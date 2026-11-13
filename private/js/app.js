@@ -2018,6 +2018,15 @@ export class App {
     this.showPop(menu);
   }
 
+  // right-click a box / line → pick a label (Demand, Supply, Order Block…) or type your own
+  labelMenu(chart, d, e) {
+    const set = (t) => { d.style.text = t; chart.requestRender(); this.saveSoon(); this.closePop(); };
+    this.showPop(h('div', { class: 'pop-menu', style: { left: e.clientX + 'px', top: e.clientY + 'px' } },
+      ...['DEMAND', 'SUPPLY', 'ORDER BLOCK', 'FRESH DEMAND', 'FRESH SUPPLY'].map((t) => h('div', { class: 'pop-item', onclick: () => set(t) }, t)),
+      h('div', { class: 'pop-item', onclick: () => { this.closePop(); const t = window.prompt('Label text', d.style.text || ''); if (t != null) set(t.trim()); } }, 'Custom text…'),
+      d.style.text ? h('div', { class: 'pop-item danger', onclick: () => set('') }, 'Remove label') : null));
+  }
+
   showChartContextMenu(chart, e, { price, drawing }) {
     this.setActive(chart);
     const sym = chart.state.symbol;
@@ -2025,6 +2034,7 @@ export class App {
     const items = [];
     if (drawing) {
       items.push(
+        h('div', { class: 'pop-item', onclick: () => { this.closePop(); this.labelMenu(chart, drawing, e); } }, drawing.style.text ? `Edit label (${drawing.style.text})…` : 'Add label…'),
         h('div', { class: 'pop-item', onclick: () => { this.closePop(); this.openDrawingProps(chart, drawing); } }, `Edit ${toolName(drawing.type)} Settings…`),
         h('div', { class: 'pop-item', onclick: () => { this.closePop(); this.cloneDrawing(chart, drawing); } }, `Clone ${toolName(drawing.type)} (Ctrl+D)`),
         h('div', { class: 'pop-item danger', onclick: () => { this.closePop(); this.removeDrawing(sym, drawing); } }, `Remove ${toolName(drawing.type)}`),

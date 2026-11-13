@@ -230,7 +230,12 @@ export class Journal extends Emitter {
       this.paperOpen(p);
     }
   }
-  rects(symbol) { return (this.app.drawingsFor(symbol) || []).filter((d) => d.type === 'rect' && !d.hidden); }
+  // boxes you label DEMAND / SUPPLY / ORDER BLOCK are the zones; unlabelled boxes (e.g. measuring boxes) are ignored once any label exists
+  rects(symbol) {
+    const all = (this.app.drawingsFor(symbol) || []).filter((d) => d.type === 'rect' && !d.hidden);
+    const tagged = all.filter((d) => /demand|supply|order\s*block|zone/i.test(d.style.text || ''));
+    return tagged.length ? tagged : all;
+  }
 
   // setup = {symbol, tf, side, entry, sl, tp, t}; chart supplies candles + zones
   analyse(chart, setup) {
