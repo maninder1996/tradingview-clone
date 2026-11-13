@@ -77,7 +77,11 @@ export class Chart extends Emitter {
     this.ctx = this.canvas.getContext('2d');
     this.ro = new ResizeObserver(() => { this.resize(); this.applyFavPos(); });
     // mobile/PWA: when the app returns from background its streams are dead — re-sync candles & scale
-    this._onVis = () => { if (document.visibilityState === 'visible' && this.bars && this.bars.length && !this.loading && this.root.isConnected) { this.resize(); this.load(); } };
+    this._onVis = () => { if (document.visibilityState === 'visible' && this.bars && this.bars.length && !this.loading && this.root.isConnected) {
+      this.resize();
+      // viewing old history: don't reload (it would jump to the latest bar). Refresh later when you go back to latest.
+      if (this.view.right < this.bars.length - 2 && !this.replay) this._stale = true; else this.load();
+    } };
     document.addEventListener('visibilitychange', this._onVis);
     this.ro.observe(this.root);
     this.bindEvents();
@@ -307,7 +311,7 @@ export class Chart extends Emitter {
     this.scales = {};
     this.requestRender();
   }
-  scrollToLatest() { this.view.right = this.data.length - 1 + this.app.settings.rightMargin; this.requestRender(); }
+  scrollToLatest() { if (this._stale) { this._stale = false; this.load(); return; } this.view.right = this.data.length - 1 + this.app.settings.rightMargin; this.requestRender(); }
   get plotW() { return this.W - AXIS_W; }
   get plotH() { return this.H - TIME_H; }
   i2x(i) { return this.plotW - (this.view.right - i) * this.view.spacing - this.view.spacing / 2; }
